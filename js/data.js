@@ -5,7 +5,6 @@ const QUIZ_DATA = [
   {
     id: "philosophy",
     name: "哲学",
-    icon: "🦉",
     color: "#8b5cf6",
     stages: [
       {
@@ -118,7 +117,6 @@ const QUIZ_DATA = [
   {
     id: "history",
     name: "歴史",
-    icon: "🏛️",
     color: "#f59e0b",
     stages: [
       {
@@ -231,7 +229,6 @@ const QUIZ_DATA = [
   {
     id: "art",
     name: "芸術",
-    icon: "🎨",
     color: "#ec4899",
     stages: [
       {
@@ -344,7 +341,6 @@ const QUIZ_DATA = [
   {
     id: "science",
     name: "科学",
-    icon: "🔭",
     color: "#06b6d4",
     stages: [
       {
@@ -457,7 +453,6 @@ const QUIZ_DATA = [
   {
     id: "literature",
     name: "文学",
-    icon: "📚",
     color: "#10b981",
     stages: [
       {
@@ -570,7 +565,6 @@ const QUIZ_DATA = [
   {
     id: "music",
     name: "音楽",
-    icon: "🎼",
     color: "#f43f5e",
     stages: [
       {

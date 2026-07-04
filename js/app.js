@@ -12,25 +12,25 @@
   const PASS_LINE = 3;          // 5問中3問正解でクリア
 
   const MISSIONS = [
-    { id: "clear",   icon: "🚩", name: "ステージを1回クリアする", goal: 1,  reward: 30, key: "clears" },
-    { id: "correct", icon: "✅", name: "10問正解する",           goal: 10, reward: 30, key: "correct" },
-    { id: "combo",   icon: "🔥", name: "3コンボを達成する",       goal: 3,  reward: 20, key: "combo" },
+    { id: "clear",   name: "ステージを1回クリアする", goal: 1,  reward: 30, key: "clears" },
+    { id: "correct", name: "10問正解する",           goal: 10, reward: 30, key: "correct" },
+    { id: "combo",   name: "3問連続で正解する",       goal: 3,  reward: 20, key: "combo" },
   ];
 
   const BADGES = [
-    { id: "first_clear", icon: "🐣", name: "はじめの一歩", desc: "初めてステージをクリア" },
-    { id: "perfect",     icon: "💯", name: "パーフェクト", desc: "全問正解でクリア" },
-    { id: "combo5",      icon: "🔥", name: "コンボマスター", desc: "5コンボを達成" },
-    { id: "allcats",     icon: "🌱", name: "教養の芽", desc: "全分野で1ステージ以上クリア" },
-    { id: "streak3",     icon: "📅", name: "三日坊主卒業", desc: "3日連続でプレイ" },
-    { id: "streak7",     icon: "🗓️", name: "習慣の力", desc: "7日連続でプレイ" },
-    { id: "level5",      icon: "🎓", name: "駆け出しの賢者", desc: "レベル5に到達" },
-    { id: "level10",     icon: "👑", name: "博識の探求者", desc: "レベル10に到達" },
+    { id: "first_clear", name: "はじめの一歩", desc: "初めてステージをクリア" },
+    { id: "perfect",     name: "全問正解", desc: "1ステージを全問正解でクリア" },
+    { id: "combo5",      name: "5問連続正解", desc: "5問連続で正解" },
+    { id: "allcats",     name: "全分野着手", desc: "全分野で1ステージ以上クリア" },
+    { id: "streak3",     name: "3日連続学習", desc: "3日連続で学習" },
+    { id: "streak7",     name: "7日連続学習", desc: "7日連続で学習" },
+    { id: "level5",      name: "レベル5到達", desc: "レベル5に到達" },
+    { id: "level10",     name: "レベル10到達", desc: "レベル10に到達" },
     ...QUIZ_DATA.map(c => ({
-      id: `master_${c.id}`, icon: c.icon, name: `${c.name}マスター`,
+      id: `master_${c.id}`, name: `${c.name}マスター`,
       desc: `${c.name}の全ステージで星3を獲得`,
     })),
-    { id: "complete", icon: "🏆", name: "真のリベラルアーティスト", desc: "全ステージで星3を獲得" },
+    { id: "complete", name: "全ステージ制覇", desc: "全ステージで星3を獲得" },
   ];
 
   // ---------- セーブデータ ----------
@@ -142,7 +142,7 @@
     const badge = BADGES.find(b => b.id === id);
     if (!badge) return;
     state.badges.push(id);
-    toast(`🏅 実績解除:${badge.name}`);
+    toast(`実績解除:${badge.name}`);
   }
 
   function checkMissions() {
@@ -152,7 +152,7 @@
       if (state.daily[m.key] >= m.goal) {
         state.daily.claimed.push(m.id);
         gainXp(m.reward);
-        toast(`📋 ミッション達成!「${m.name}」 +${m.reward}XP`);
+        toast(`目標達成:「${m.name}」 +${m.reward}XP`);
       }
     }
   }
@@ -201,7 +201,7 @@
     ensureDaily();
     const info = levelInfo(state.xp);
     document.getElementById("home-level").textContent = info.level;
-    document.getElementById("home-streak").textContent = `🔥 ${state.streak.count}日`;
+    document.getElementById("home-streak").textContent = `連続 ${state.streak.count}日`;
     document.getElementById("home-xp-fill").style.width = `${(info.current / info.needed) * 100}%`;
     document.getElementById("home-xp-text").textContent = `${info.current} / ${info.needed} XP`;
 
@@ -213,12 +213,11 @@
       const el = document.createElement("div");
       el.className = `mission${done ? " done" : ""}`;
       el.innerHTML = `
-        <div class="mission-icon">${m.icon}</div>
         <div class="mission-main">
           <div class="mission-name">${m.name} (${progress}/${m.goal})</div>
           <div class="mission-bar"><div class="mission-bar-fill" style="width:${(progress / m.goal) * 100}%"></div></div>
         </div>
-        <div class="mission-reward">${done ? "達成✓" : `+${m.reward}XP`}</div>`;
+        <div class="mission-reward">${done ? "達成" : `+${m.reward}XP`}</div>`;
       missionList.appendChild(el);
     }
 
@@ -228,9 +227,9 @@
     const stats = [
       { value: `${clearedStages}/${totalStages}`, label: "クリア" },
       { value: `${totalStars}/${totalStages * 3}`, label: "獲得スター" },
-      { value: `${state.badges.length}/${BADGES.length}`, label: "バッジ" },
+      { value: `${state.badges.length}/${BADGES.length}`, label: "実績" },
       { value: state.totals.correct, label: "累計正解" },
-      { value: state.totals.maxCombo, label: "最大コンボ" },
+      { value: state.totals.maxCombo, label: "最大連続正解" },
       { value: state.totals.perfects, label: "全問正解" },
     ];
     document.getElementById("home-stats").innerHTML = stats.map(s =>
@@ -250,10 +249,9 @@
       btn.className = "category-card";
       btn.style.setProperty("--cat-color", cat.color);
       btn.innerHTML = `
-        <span class="category-icon">${cat.icon}</span>
         <div class="category-name">${cat.name}</div>
         <div class="category-progress">${cleared}/${cat.stages.length} ステージ</div>
-        <div class="category-stars">⭐ ${stars}/${cat.stages.length * 3}</div>`;
+        <div class="category-stars">★ ${stars}/${cat.stages.length * 3}</div>`;
       btn.addEventListener("click", () => openStages(cat.id));
       list.appendChild(btn);
     }
@@ -271,7 +269,7 @@
 
   function renderStages() {
     const cat = QUIZ_DATA.find(c => c.id === currentCatId);
-    document.getElementById("stages-title").textContent = `${cat.icon} ${cat.name}`;
+    document.getElementById("stages-title").textContent = cat.name;
     const list = document.getElementById("stage-list");
     list.innerHTML = "";
     cat.stages.forEach((stage, i) => {
@@ -282,7 +280,7 @@
       btn.style.setProperty("--cat-color", cat.color);
       const starsHtml = "★".repeat(record.stars) + "☆".repeat(3 - record.stars);
       btn.innerHTML = `
-        <div class="stage-num">${unlocked ? i + 1 : "🔒"}</div>
+        <div class="stage-num">${unlocked ? i + 1 : "－"}</div>
         <div class="stage-main">
           <div class="stage-name">ステージ${i + 1}:${stage.name}</div>
           <div class="stage-sub">${unlocked ? `全${stage.questions.length}問 ・ ベスト ${record.best}問正解` : "前のステージをクリアで解放"}</div>
@@ -330,7 +328,7 @@
 
     document.getElementById("quiz-progress-fill").style.width = `${(quiz.index / total) * 100}%`;
     document.getElementById("quiz-meta").textContent =
-      `${cat.icon} ${cat.name} ${stage.name} ・ 第${quiz.index + 1}問 / 全${total}問`;
+      `${cat.name} ${stage.name} ・ 第${quiz.index + 1}問 / 全${total}問`;
     document.getElementById("question-text").textContent = q.q;
 
     const comboBadge = document.getElementById("combo-badge");
@@ -386,8 +384,8 @@
 
     const verdict = document.getElementById("explanation-verdict");
     verdict.textContent = isCorrect
-      ? (quiz.combo >= 2 ? `⭕ 正解! ${quiz.combo}コンボ!` : "⭕ 正解!")
-      : `❌ 残念… 正解は「${q.choices[q.answer]}」`;
+      ? (quiz.combo >= 2 ? `正解(${quiz.combo}問連続正解)` : "正解")
+      : `不正解 — 正解は「${q.choices[q.answer]}」`;
     verdict.className = `explanation-verdict ${isCorrect ? "good" : "bad"}`;
     document.getElementById("explanation-text").textContent = q.exp;
     document.getElementById("btn-next").textContent =
@@ -446,11 +444,11 @@
 
     // 画面描画
     document.getElementById("result-title").textContent =
-      perfect ? "🎉 パーフェクト!" : cleared ? "🎊 ステージクリア!" : "😢 あと少し…";
+      perfect ? "全問正解" : cleared ? "ステージクリア" : "クリアまであと一歩";
     document.getElementById("result-stars").innerHTML =
-      [1, 2, 3].map(i => `<span class="star${i <= stars ? " earned" : ""}">⭐</span>`).join("");
+      [1, 2, 3].map(i => `<span class="star${i <= stars ? " earned" : ""}">★</span>`).join("");
     document.getElementById("result-score").textContent =
-      `${total}問中 ${quiz.correct}問正解 ・ 最大${quiz.maxCombo}コンボ` +
+      `${total}問中 ${quiz.correct}問正解 ・ 最大${quiz.maxCombo}問連続正解` +
       (cleared ? "" : ` (${PASS_LINE}問正解でクリア)`);
     document.getElementById("result-xp").textContent = `+${earnedXp} XP`;
 
@@ -464,7 +462,7 @@
     const nextIdx = quiz.stageIdx + 1;
     const hasNext = cleared && nextIdx < cat.stages.length;
     const btnContinue = document.getElementById("btn-continue");
-    btnContinue.textContent = hasNext ? "次のステージへ" : "マップへ";
+    btnContinue.textContent = hasNext ? "次のステージへ" : "分野一覧へ";
     btnContinue.onclick = () => {
       if (hasNext) startQuiz(quiz.catId, nextIdx);
       else { renderStages(); show("screen-stages"); render(); }
@@ -489,7 +487,7 @@
       const el = document.createElement("div");
       el.className = `badge${owned ? "" : " locked"}`;
       el.innerHTML = `
-        <div class="badge-icon">${owned ? b.icon : "🔒"}</div>
+        <div class="badge-status">${owned ? "達成" : "未達成"}</div>
         <div class="badge-name">${b.name}</div>
         <div class="badge-desc">${b.desc}</div>`;
       list.appendChild(el);
