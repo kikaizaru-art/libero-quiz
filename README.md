@@ -13,7 +13,14 @@ python3 -m http.server 8000
 # → http://localhost:8000 をスマホ/PCのブラウザで開く
 ```
 
-GitHub Pages にそのままデプロイ可能です(Settings → Pages → ブランチを選択)。
+## ☁️ デプロイ(Vercel)
+
+Vercelにインポート済みであれば、ブランチにプッシュするだけで自動デプロイされます。
+
+- **本番**:`main` ブランチへのマージで本番URLが更新
+- **プレビュー**:作業ブランチへのプッシュごとにプレビューURLが自動発行
+
+初回のみ [vercel.com/new](https://vercel.com/new) でこのリポジトリをインポートしてください(静的サイトなのでビルド設定は不要、そのまま Deploy でOK)。`vercel.json` に基本設定を同梱しています。GitHub Pages でも同様に公開可能です。
 
 ## 🎮 ゲームシステム(スマホゲーム設計の採用要素)
 
