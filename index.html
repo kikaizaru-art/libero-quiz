@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#1e1b4b">
-  <title>リベロクイズ — 遊んで深める教養</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+  <meta name="theme-color" content="#0f172a">
+  <title>リベロクイズ — 1日5問のビジネス教養</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f172a%22/><text x=%2250%22 y=%2270%22 font-size=%2258%22 text-anchor=%22middle%22 fill=%22%23f8fafc%22 font-family=%22sans-serif%22 font-weight=%22bold%22>L</text></svg>">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -14,11 +14,10 @@
     <!-- ホーム画面 -->
     <section id="screen-home" class="screen active">
       <header class="player-header">
-        <div class="avatar">🎓</div>
         <div class="player-info">
           <div class="player-row">
             <span class="player-level">Lv.<span id="home-level">1</span></span>
-            <span class="streak-pill" id="home-streak">🔥 0日</span>
+            <span class="streak-pill" id="home-streak">連続 0日</span>
           </div>
           <div class="xp-bar"><div class="xp-fill" id="home-xp-fill"></div></div>
           <div class="xp-text" id="home-xp-text">0 / 100 XP</div>
@@ -27,27 +26,27 @@
 
       <div class="home-hero">
         <h1 class="app-title">リベロクイズ</h1>
-        <p class="app-subtitle">1日5問、遊んで深める教養</p>
+        <p class="app-subtitle">1日5問、ビジネスパーソンのための教養トレーニング</p>
       </div>
 
       <div class="card missions-card">
-        <h2 class="card-title">📋 デイリーミッション</h2>
+        <h2 class="card-title">本日の目標</h2>
         <div id="mission-list"></div>
       </div>
 
-      <button class="btn btn-primary btn-big" id="btn-start">▶ クエストに出発</button>
+      <button class="btn btn-primary btn-big" id="btn-start">学習を始める</button>
 
       <div class="card stats-card">
-        <h2 class="card-title">📊 きみの記録</h2>
+        <h2 class="card-title">学習記録</h2>
         <div class="stats-grid" id="home-stats"></div>
       </div>
     </section>
 
-    <!-- 分野マップ画面 -->
+    <!-- 分野一覧画面 -->
     <section id="screen-map" class="screen">
       <header class="screen-header">
-        <h1>クエストマップ</h1>
-        <p>分野を選んでステージに挑戦しよう</p>
+        <h1>分野一覧</h1>
+        <p>学習する分野を選択してください</p>
       </header>
       <div id="category-list" class="category-list"></div>
     </section>
@@ -66,7 +65,7 @@
       <header class="quiz-header">
         <button class="btn-back" id="btn-quiz-quit">✕</button>
         <div class="quiz-progress"><div class="quiz-progress-fill" id="quiz-progress-fill"></div></div>
-        <div class="combo-badge hidden" id="combo-badge">🔥 <span id="combo-count">0</span></div>
+        <div class="combo-badge hidden" id="combo-badge"><span id="combo-count">0</span>問連続正解</div>
       </header>
       <div class="quiz-body">
         <div class="quiz-meta" id="quiz-meta"></div>
@@ -85,7 +84,7 @@
     <!-- リザルト画面 -->
     <section id="screen-result" class="screen">
       <div class="result-body">
-        <h1 class="result-title" id="result-title">クリア!</h1>
+        <h1 class="result-title" id="result-title">クリア</h1>
         <div class="result-stars" id="result-stars"></div>
         <div class="result-score" id="result-score"></div>
         <div class="card result-xp-card">
@@ -94,8 +93,8 @@
           <div class="xp-text" id="result-xp-text"></div>
         </div>
         <div class="result-buttons">
-          <button class="btn btn-secondary" id="btn-retry">もう一度</button>
-          <button class="btn btn-primary" id="btn-continue">つづける</button>
+          <button class="btn btn-secondary" id="btn-retry">再挑戦</button>
+          <button class="btn btn-primary" id="btn-continue">次へ</button>
         </div>
       </div>
     </section>
@@ -103,7 +102,7 @@
     <!-- 実績画面 -->
     <section id="screen-badges" class="screen">
       <header class="screen-header">
-        <h1>実績バッジ</h1>
+        <h1>実績</h1>
         <p id="badges-count"></p>
       </header>
       <div id="badge-list" class="badge-list"></div>
@@ -111,21 +110,20 @@
 
     <!-- 下部ナビゲーション -->
     <nav class="bottom-nav" id="bottom-nav">
-      <button class="nav-item active" data-screen="screen-home"><span class="nav-icon">🏠</span>ホーム</button>
-      <button class="nav-item" data-screen="screen-map"><span class="nav-icon">🗺️</span>クエスト</button>
-      <button class="nav-item" data-screen="screen-badges"><span class="nav-icon">🏅</span>実績</button>
+      <button class="nav-item active" data-screen="screen-home">ホーム</button>
+      <button class="nav-item" data-screen="screen-map">学習</button>
+      <button class="nav-item" data-screen="screen-badges">実績</button>
     </nav>
 
     <!-- トースト通知 -->
     <div id="toast-container"></div>
 
-    <!-- レベルアップ演出 -->
+    <!-- レベルアップ表示 -->
     <div id="levelup-overlay" class="hidden">
       <div class="levelup-box">
-        <div class="levelup-burst">✨</div>
-        <div class="levelup-label">LEVEL UP!</div>
+        <div class="levelup-label">LEVEL UP</div>
         <div class="levelup-level" id="levelup-level">Lv.2</div>
-        <button class="btn btn-primary" id="btn-levelup-close">やったね!</button>
+        <button class="btn btn-primary" id="btn-levelup-close">閉じる</button>
       </div>
     </div>
 
