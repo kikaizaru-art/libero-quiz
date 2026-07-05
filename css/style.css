@@ -120,12 +120,8 @@ body { background: var(--bg-grad); background-attachment: fixed; }
 }
 .xp-text { font-size: 11px; color: var(--text-dim); margin-top: 4px; text-align: right; }
 
-.home-hero { text-align: center; margin: 22px 0 14px; }
-.app-title {
-  font-size: 28px; font-weight: 800; letter-spacing: 0.06em;
-  color: var(--text);
-}
-.app-subtitle { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
+.home-hero { text-align: center; margin: 20px 0 12px; }
+.app-subtitle { color: var(--text-dim); font-size: 13px; }
 
 /* ミッション */
 .mission {
