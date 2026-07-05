@@ -117,15 +117,26 @@
       </div>
       <div class="card">
         <h2 class="card-title">学習カレンダー(直近12週)</h2>
-        <div class="heatmap" id="stats-heatmap"></div>
-        <div class="heatmap-legend">
-          <span>少</span>
-          <div class="heatmap-cell l0"></div>
-          <div class="heatmap-cell l1"></div>
-          <div class="heatmap-cell l2"></div>
-          <div class="heatmap-cell l3"></div>
-          <div class="heatmap-cell l4"></div>
-          <span>多</span>
+        <div class="heatmap-wrap">
+          <div class="heatmap-days">
+            <span></span><span>月</span><span></span><span>水</span><span></span><span>金</span><span></span>
+          </div>
+          <div class="heatmap-main">
+            <div class="heatmap-months" id="stats-months"></div>
+            <div class="heatmap" id="stats-heatmap"></div>
+          </div>
+        </div>
+        <div class="heatmap-foot">
+          <span class="heatmap-today" id="heatmap-today"></span>
+          <span class="heatmap-legend">
+            <span>少</span>
+            <span class="heatmap-cell l0"></span>
+            <span class="heatmap-cell l1"></span>
+            <span class="heatmap-cell l2"></span>
+            <span class="heatmap-cell l3"></span>
+            <span class="heatmap-cell l4"></span>
+            <span>多</span>
+          </span>
         </div>
       </div>
       <div class="card">

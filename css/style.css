@@ -161,28 +161,50 @@ body { background: var(--bg-grad); background-attachment: fixed; }
 .btn-review:disabled:active { transform: none; }
 
 /* ---------- 記録画面 ---------- */
+:root {
+  --hm-cell: 20px;
+  --hm-gap: 4px;
+}
+.heatmap-wrap { display: flex; gap: 8px; justify-content: center; }
+.heatmap-days {
+  display: grid;
+  grid-template-rows: repeat(7, var(--hm-cell));
+  gap: var(--hm-gap);
+  padding-top: 20px; /* 月ラベル行のぶん下げて行を揃える */
+  font-size: 10px; color: var(--text-dim);
+}
+.heatmap-days span { display: flex; align-items: center; }
+.heatmap-months {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc(var(--hm-cell) + var(--hm-gap));
+  height: 16px; margin-bottom: 4px;
+  font-size: 10px; color: var(--text-dim);
+}
+.heatmap-month { white-space: nowrap; }
 .heatmap {
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(7, 14px);
-  grid-auto-columns: 14px;
-  gap: 3px;
-  justify-content: center;
+  grid-template-rows: repeat(7, var(--hm-cell));
+  grid-auto-columns: var(--hm-cell);
+  gap: var(--hm-gap);
 }
 .heatmap-cell {
-  width: 14px; height: 14px; border-radius: 3px;
-  background: rgba(255, 255, 255, 0.08);
+  width: var(--hm-cell); height: var(--hm-cell); border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
 }
-.heatmap-cell.l1 { background: rgba(37, 99, 235, 0.35); }
-.heatmap-cell.l2 { background: rgba(37, 99, 235, 0.55); }
-.heatmap-cell.l3 { background: rgba(59, 130, 246, 0.8); }
-.heatmap-cell.l4 { background: #60a5fa; }
-.heatmap-legend {
-  display: flex; align-items: center; justify-content: flex-end; gap: 4px;
-  margin-top: 10px;
+.heatmap-cell.l1 { background: #1e40af; }
+.heatmap-cell.l2 { background: #2563eb; }
+.heatmap-cell.l3 { background: #60a5fa; }
+.heatmap-cell.l4 { background: #bfdbfe; }
+.heatmap-cell.today { box-shadow: 0 0 0 2px var(--accent); }
+.heatmap-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 12px;
   font-size: 11px; color: var(--text-dim);
 }
-.heatmap-legend .heatmap-cell { width: 11px; height: 11px; }
+.heatmap-legend { display: inline-flex; align-items: center; gap: 4px; }
+.heatmap-legend .heatmap-cell { width: 11px; height: 11px; border-radius: 3px; }
 
 .cat-rate { padding: 9px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
 .cat-rate:last-child { border-bottom: none; padding-bottom: 0; }

@@ -632,14 +632,33 @@
     const today = new Date();
     const start = new Date(today);
     start.setDate(today.getDate() - today.getDay() - (WEEKS - 1) * 7);
+    const todayKey = todayStr();
+
+    // 月ラベル:月が変わる週の上に「n月」を表示
+    let months = "";
+    let prevMonth = -1;
+    for (let w = 0; w < WEEKS; w++) {
+      const sunday = new Date(start);
+      sunday.setDate(start.getDate() + w * 7);
+      const m = sunday.getMonth();
+      months += `<span class="heatmap-month">${m !== prevMonth ? `${m + 1}月` : ""}</span>`;
+      prevMonth = m;
+    }
+    document.getElementById("stats-months").innerHTML = months;
+
     let cells = "";
     for (const d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
       const key = dateStr(d);
       const n = state.activity[key] || 0;
       const lv = n === 0 ? 0 : n < 5 ? 1 : n < 10 ? 2 : n < 20 ? 3 : 4;
-      cells += `<div class="heatmap-cell l${lv}" title="${key}:${n}問"></div>`;
+      cells += `<div class="heatmap-cell l${lv}${key === todayKey ? " today" : ""}" title="${key}:${n}問"></div>`;
     }
     document.getElementById("stats-heatmap").innerHTML = cells;
+
+    // 今日の学習量をひとことで
+    const todayN = state.activity[todayKey] || 0;
+    document.getElementById("heatmap-today").textContent =
+      todayN > 0 ? `今日は ${todayN}問 解答しました` : "今日はまだ解答していません";
 
     // 分野別正答率
     document.getElementById("stats-cats").innerHTML = QUIZ_DATA.map(cat => {
