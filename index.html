@@ -24,6 +24,9 @@
           <div class="xp-bar"><div class="xp-fill" id="home-xp-fill"></div></div>
           <div class="xp-text" id="home-xp-text">0 / 100 XP</div>
         </div>
+        <button class="btn-settings" id="btn-settings" aria-label="設定">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.08a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
       </header>
 
       <div class="card today-card">
@@ -182,6 +185,42 @@
       </div>
     </section>
 
+    <!-- 設定画面 -->
+    <section id="screen-settings" class="screen">
+      <header class="screen-header with-back">
+        <button class="btn-back" id="btn-settings-back" aria-label="ホームに戻る">←</button>
+        <h1>設定</h1>
+      </header>
+
+      <div class="card">
+        <h2 class="card-title">テーマ</h2>
+        <div class="segment theme-segment" id="theme-segment" role="radiogroup" aria-label="テーマの選択">
+          <button class="segment-btn" data-theme="system" role="radio" aria-checked="false">システム</button>
+          <button class="segment-btn" data-theme="light" role="radio" aria-checked="false">ライト</button>
+          <button class="segment-btn" data-theme="dark" role="radio" aria-checked="false">ダーク</button>
+        </div>
+        <p class="settings-note">「システム」を選ぶと端末の外観モードに合わせて自動で切り替わります。</p>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">データ管理</h2>
+        <div class="settings-item">
+          <div class="settings-item-main">
+            <div class="settings-item-name">復習リストをリセット</div>
+            <p class="settings-item-desc" id="settings-review-desc"></p>
+          </div>
+          <button class="btn btn-secondary btn-small" id="btn-reset-review">リセット</button>
+        </div>
+        <div class="settings-item">
+          <div class="settings-item-main">
+            <div class="settings-item-name">学習状況をすべてリセット</div>
+            <p class="settings-item-desc">レベル・XP・ステージ進捗・実績・学習記録など、すべてのデータを初期化します。</p>
+          </div>
+          <button class="btn btn-danger btn-small" id="btn-reset-all">リセット</button>
+        </div>
+      </div>
+    </section>
+
     <!-- 下部ナビゲーション -->
     <nav class="bottom-nav" id="bottom-nav">
       <button class="nav-item active" data-screen="screen-home">ホーム</button>
@@ -208,6 +247,18 @@
         <div class="modal-buttons">
           <button class="btn btn-secondary" id="btn-quit-cancel">続ける</button>
           <button class="btn btn-danger" id="btn-quit-confirm">中断する</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- リセット確認 -->
+    <div id="reset-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+      <div class="modal-box">
+        <h2 id="reset-title"></h2>
+        <p id="reset-desc"></p>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" id="btn-reset-cancel">やめる</button>
+          <button class="btn btn-danger" id="btn-reset-confirm">リセットする</button>
         </div>
       </div>
     </div>

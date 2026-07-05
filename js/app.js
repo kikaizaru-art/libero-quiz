@@ -77,6 +77,37 @@
 
   let state = loadState();
 
+  // ---------- 設定(学習データとは別キーで保存。学習リセット後も維持) ----------
+
+  const SETTINGS_KEY = "libero-quiz-settings-v1";
+
+  function defaultSettings() {
+    return { theme: "system" }; // "system" | "light" | "dark"
+  }
+
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      return raw ? Object.assign(defaultSettings(), JSON.parse(raw)) : defaultSettings();
+    } catch {
+      return defaultSettings();
+    }
+  }
+
+  function saveSettings() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch { /* プライベートモード等では保存不可 */ }
+  }
+
+  let settings = loadSettings();
+
+  function applyTheme() {
+    const root = document.documentElement;
+    if (settings.theme === "system") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", settings.theme);
+  }
+
   // ---------- レベル計算 ----------
 
   function xpNeededFor(level) {
@@ -240,7 +271,7 @@
   function show(screenId) {
     screens.forEach(s => s.classList.toggle("active", s.id === screenId));
     navItems.forEach(n => n.classList.toggle("active", n.dataset.screen === screenId));
-    const navScreens = ["screen-home", "screen-map", "screen-stages", "screen-review", "screen-stats"];
+    const navScreens = ["screen-home", "screen-map", "screen-stages", "screen-review", "screen-stats", "screen-settings"];
     document.getElementById("bottom-nav").style.display =
       navScreens.includes(screenId) ? "flex" : "none";
     window.scrollTo(0, 0);
@@ -919,6 +950,91 @@
     }).join("");
   }
 
+  // ---------- 設定画面 ----------
+
+  function renderSettings() {
+    document.querySelectorAll("#theme-segment .segment-btn").forEach(b => {
+      const active = b.dataset.theme === settings.theme;
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-checked", String(active));
+    });
+
+    const n = Object.keys(state.wrong).length;
+    document.getElementById("settings-review-desc").textContent = n > 0
+      ? `復習待ちの ${n}問 を空にします。ステージ進捗や記録は残ります。`
+      : "復習待ちはありません。";
+    document.getElementById("btn-reset-review").disabled = n === 0;
+  }
+
+  document.getElementById("btn-settings").addEventListener("click", () => {
+    renderSettings();
+    show("screen-settings");
+  });
+  document.getElementById("btn-settings-back").addEventListener("click", () => {
+    show("screen-home");
+    render();
+  });
+
+  document.querySelectorAll("#theme-segment .segment-btn").forEach(btn =>
+    btn.addEventListener("click", () => {
+      settings.theme = btn.dataset.theme;
+      saveSettings();
+      applyTheme();
+      renderSettings();
+    })
+  );
+
+  // リセット確認モーダル(実行内容を差し替えて共用)
+  const resetOverlay = document.getElementById("reset-overlay");
+  let resetAction = null;
+
+  function confirmReset(title, desc, action) {
+    document.getElementById("reset-title").textContent = title;
+    document.getElementById("reset-desc").textContent = desc;
+    resetAction = action;
+    resetOverlay.classList.remove("hidden");
+  }
+
+  document.getElementById("btn-reset-cancel").addEventListener("click", () => {
+    resetOverlay.classList.add("hidden");
+    resetAction = null;
+  });
+  document.getElementById("btn-reset-confirm").addEventListener("click", () => {
+    resetOverlay.classList.add("hidden");
+    const action = resetAction;
+    resetAction = null;
+    if (action) action();
+  });
+
+  document.getElementById("btn-reset-review").addEventListener("click", () =>
+    confirmReset(
+      "復習リストをリセットしますか?",
+      "復習待ちの問題がすべて消えます。この操作は取り消せません。",
+      () => {
+        state.wrong = {};
+        saveState();
+        render();
+        renderSettings();
+        toast("復習リストをリセットしました");
+      }
+    )
+  );
+
+  document.getElementById("btn-reset-all").addEventListener("click", () =>
+    confirmReset(
+      "学習状況をすべてリセットしますか?",
+      "レベル・進捗・実績・学習記録などすべてのデータが消えます。この操作は取り消せません。",
+      () => {
+        state = defaultState();
+        saveState();
+        ensureDaily();
+        render();
+        renderSettings();
+        toast("学習状況をリセットしました");
+      }
+    )
+  );
+
   // ---------- 共通イベント ----------
 
   document.getElementById("btn-start").addEventListener("click", () => startToday());
@@ -964,6 +1080,7 @@
 
   // ---------- 起動 ----------
 
+  applyTheme();
   ensureDaily();
   render();
   show("screen-home");
