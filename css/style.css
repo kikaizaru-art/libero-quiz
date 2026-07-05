@@ -117,7 +117,15 @@ html, body {
   color: var(--text);
 }
 
-body { background: var(--bg-grad); background-attachment: fixed; }
+/* iOS Safari は background-attachment: fixed 非対応のため、固定背景は疑似要素で描画する */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg-grad);
+  pointer-events: none;
+}
 
 #app {
   max-width: 480px;
