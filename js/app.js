@@ -49,6 +49,7 @@
       badges: [],
       totals: { answered: 0, correct: 0, perfects: 0, maxCombo: 0, clears: 0, reviewMastered: 0 },
       wrong: {},                                   // "catId:stageIdx:qIdx" -> { count, last }
+      seen: {},                                    // "catId:stageIdx:qIdx" -> true(ライブラリ解放済み)
       catStats: {},                                // catId -> { answered, correct }
       activity: {},                                // "YYYY-MM-DD" -> その日の解答数
       lastStage: null,                             // { catId, stageIdx } 最後に挑戦したステージ
@@ -64,6 +65,8 @@
       const merged = Object.assign(base, saved);
       // 旧バージョンのセーブデータに新フィールドを補完
       merged.totals = Object.assign(defaultState().totals, saved.totals || {});
+      // 旧データ移行:復習リストにある問題は出会い済みなのでライブラリを解放
+      for (const k of Object.keys(merged.wrong)) merged.seen[k] = true;
       return merged;
     } catch {
       return defaultState();
@@ -324,7 +327,7 @@
   function show(screenId) {
     screens.forEach(s => s.classList.toggle("active", s.id === screenId));
     navItems.forEach(n => n.classList.toggle("active", n.dataset.screen === screenId));
-    const navScreens = ["screen-home", "screen-map", "screen-stages", "screen-review", "screen-stats", "screen-settings"];
+    const navScreens = ["screen-home", "screen-map", "screen-stages", "screen-review", "screen-library", "screen-stats", "screen-settings"];
     document.getElementById("bottom-nav").style.display =
       navScreens.includes(screenId) ? "flex" : "none";
     window.scrollTo(0, 0);
@@ -591,6 +594,7 @@
     });
 
     state.totals.answered++;
+    state.seen[wrongKey] = true; // 出会った問題はライブラリに解放
 
     // 分野別成績・日別解答数(記録画面用)
     const cs = state.catStats[item.catId] || (state.catStats[item.catId] = { answered: 0, correct: 0 });
@@ -639,6 +643,17 @@
       : `不正解 — 正解は「${q.choices[q.answer]}」`;
     verdict.className = `explanation-verdict ${isCorrect ? "good" : "bad"}`;
     document.getElementById("explanation-text").textContent = q.exp;
+
+    // 正解に関連する外部リンク(ライブラリにも収録)
+    const linksEl = document.getElementById("explanation-links");
+    if (q.lib && q.lib.links.length > 0) {
+      linksEl.innerHTML =
+        `<div class="explanation-links-label">「${q.lib.title}」をもっと知る</div>${libLinksHtml(q)}`;
+      linksEl.classList.remove("hidden");
+    } else {
+      linksEl.classList.add("hidden");
+    }
+
     document.getElementById("btn-next").textContent =
       quiz.index + 1 < quiz.items.length ? "次へ" : "結果を見る";
     openSheet();
@@ -861,6 +876,88 @@
         </div>`).join("");
     }
   }
+
+  // ---------- ライブラリ ----------
+
+  // 外部リンクのチップHTML(解説シート・ライブラリ詳細で共用)
+  function libLinksHtml(q) {
+    return q.lib.links.map(l =>
+      `<a class="lib-link" href="${l.url}" target="_blank" rel="noopener">${l.label}<span class="lib-link-ext" aria-hidden="true">↗</span></a>`
+    ).join("");
+  }
+
+  // 出題形式を問わず、一度解答した問題の知識カードが解放される
+  function renderLibrary() {
+    let total = 0, found = 0;
+    const list = document.getElementById("library-list");
+    list.innerHTML = "";
+
+    for (const cat of QUIZ_DATA) {
+      const rows = [];
+      cat.stages.forEach((stage, si) => {
+        stage.questions.forEach((q, qi) => {
+          total++;
+          const seen = !!state.seen[`${cat.id}:${si}:${qi}`];
+          if (seen) found++;
+          rows.push({ seen, q, stageName: stage.name });
+        });
+      });
+
+      const card = document.createElement("div");
+      card.className = "card library-cat";
+      card.style.setProperty("--cat-color", cat.color);
+      card.innerHTML = `
+        <div class="library-cat-head">
+          <span class="library-cat-name">${cat.name}</span>
+          <span class="library-cat-count">${rows.filter(r => r.seen).length}/${rows.length}</span>
+        </div>`;
+      for (const r of rows) {
+        if (r.seen) {
+          const btn = document.createElement("button");
+          btn.className = "library-item";
+          btn.innerHTML = `
+            <span class="library-item-title">${r.q.lib.title}</span>
+            <span class="library-item-sub">${r.stageName}</span>
+            <span class="library-item-chev" aria-hidden="true">›</span>`;
+          btn.addEventListener("click", () => openLibEntry(cat, r.q));
+          card.appendChild(btn);
+        } else {
+          const div = document.createElement("div");
+          div.className = "library-item locked";
+          div.innerHTML = `
+            <span class="library-item-title">???</span>
+            <span class="library-item-sub">${r.stageName}</span>`;
+          card.appendChild(div);
+        }
+      }
+      list.appendChild(card);
+    }
+
+    document.getElementById("library-sub").textContent =
+      `集めた知識カード ${found} / ${total}`;
+  }
+
+  // ライブラリ詳細(問題・正解・解説・関連リンク)
+  const libOverlay = document.getElementById("lib-overlay");
+
+  function openLibEntry(cat, q) {
+    const catEl = document.getElementById("lib-cat");
+    catEl.textContent = cat.name;
+    catEl.style.background = cat.color;
+    document.getElementById("lib-title").textContent = q.lib.title;
+    document.getElementById("lib-q").textContent = q.q;
+    document.getElementById("lib-answer").textContent = q.choices[q.answer];
+    document.getElementById("lib-exp").textContent = q.exp;
+    document.getElementById("lib-links").innerHTML = libLinksHtml(q);
+    libOverlay.classList.remove("hidden");
+  }
+
+  document.getElementById("btn-lib-close").addEventListener("click", () => {
+    libOverlay.classList.add("hidden");
+  });
+  libOverlay.addEventListener("click", (e) => {
+    if (e.target === libOverlay) libOverlay.classList.add("hidden");
+  });
 
   function updateNavBadge() {
     const n = Object.keys(state.wrong).length;
@@ -1129,6 +1226,7 @@
     renderHome();
     renderMap();
     renderReview();
+    renderLibrary();
     renderStats();
     renderBadges();
     updateNavBadge();

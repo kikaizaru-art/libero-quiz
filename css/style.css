@@ -303,6 +303,78 @@ button:focus-visible {
 .review-item-q { font-size: 13px; font-weight: 700; line-height: 1.6; }
 .review-item-meta { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
 
+/* ---------- ライブラリ ---------- */
+.library-note {
+  font-size: 12px; color: var(--text-dim); line-height: 1.7;
+  margin: -6px 2px 14px;
+}
+.library-cat { padding: 14px 16px; }
+.library-cat-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding-bottom: 9px;
+  border-bottom: 2px solid var(--cat-color, var(--border));
+}
+.library-cat-name { font-size: 15px; font-weight: 800; }
+.library-cat-count { font-size: 12px; font-weight: 700; color: var(--text-dim); }
+
+.library-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  background: none; border: none; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-family: inherit; color: var(--text); text-align: left;
+  padding: 11px 2px;
+  transition: background 0.15s ease;
+}
+.library-item:last-child { border-bottom: none; padding-bottom: 4px; }
+.library-item:active { background: var(--pill); }
+.library-item.locked { cursor: default; }
+.library-item.locked:active { background: none; }
+.library-item.locked .library-item-title {
+  color: var(--text-dim); opacity: 0.55; letter-spacing: 0.2em;
+}
+.library-item-title { flex: 1; font-size: 13px; font-weight: 700; line-height: 1.5; }
+.library-item-sub { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.library-item-chev { color: var(--text-dim); font-size: 16px; font-weight: 700; }
+
+/* 外部リンクチップ(解説シート・ライブラリ詳細で共用) */
+.lib-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--pill);
+  border: 1px solid var(--border-strong);
+  color: var(--link);
+  text-decoration: none;
+  font-size: 12px; font-weight: 700;
+  border-radius: 999px;
+  padding: 7px 12px;
+  margin: 8px 6px 0 0;
+}
+.lib-link:active { background: var(--btn2); }
+.lib-link-ext { font-size: 11px; opacity: 0.8; }
+
+.explanation-links { margin-top: 12px; }
+.explanation-links-label,
+.lib-links-label {
+  font-size: 11px; font-weight: 800;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+
+/* ライブラリ詳細モーダル */
+.modal-box.lib-box { text-align: left; max-height: 80dvh; overflow-y: auto; }
+.lib-cat {
+  display: inline-block;
+  color: #fff; font-size: 11px; font-weight: 800;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.lib-box h2 { margin-top: 10px; font-size: 18px; line-height: 1.5; }
+.lib-answer-row { font-size: 13px; font-weight: 700; color: var(--text-dim); margin-top: 10px; }
+.lib-answer { color: var(--good); font-weight: 800; margin-left: 2px; }
+.lib-box .lib-exp { margin-top: 10px; }
+.lib-links-label { display: block; margin-top: 14px; }
+.lib-box .btn { width: 100%; margin-top: 18px; font-size: 14px; padding: 12px; }
+
 /* ---------- 記録画面 ---------- */
 .segment {
   display: flex; gap: 4px;

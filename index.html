@@ -134,6 +134,16 @@
       </div>
     </section>
 
+    <!-- ライブラリ画面 -->
+    <section id="screen-library" class="screen">
+      <header class="screen-header">
+        <h1>ライブラリ</h1>
+        <p id="library-sub"></p>
+      </header>
+      <p class="library-note">クイズで出会った問題が知識カードとして集まります。カードを開くと、問題・解説・関連リンクをいつでも見返せます。</p>
+      <div id="library-list"></div>
+    </section>
+
     <!-- 記録画面(学習記録+実績) -->
     <section id="screen-stats" class="screen">
       <header class="screen-header">
@@ -230,6 +240,7 @@
       <button class="nav-item active" data-screen="screen-home">ホーム</button>
       <button class="nav-item" data-screen="screen-map">学習</button>
       <button class="nav-item" data-screen="screen-review">復習<span class="nav-badge hidden" id="nav-review-badge"></span></button>
+      <button class="nav-item" data-screen="screen-library">ライブラリ</button>
       <button class="nav-item" data-screen="screen-stats">記録</button>
     </nav>
 
@@ -237,6 +248,7 @@
     <div class="explanation-sheet" id="explanation" role="region" aria-label="解説">
       <div class="explanation-verdict" id="explanation-verdict"></div>
       <p id="explanation-text"></p>
+      <div class="explanation-links hidden" id="explanation-links"></div>
       <button class="btn btn-primary" id="btn-next">次へ</button>
     </div>
 
@@ -264,6 +276,20 @@
           <button class="btn btn-secondary" id="btn-reset-cancel">やめる</button>
           <button class="btn btn-danger" id="btn-reset-confirm">リセットする</button>
         </div>
+      </div>
+    </div>
+
+    <!-- ライブラリ詳細 -->
+    <div id="lib-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="lib-title">
+      <div class="modal-box lib-box">
+        <span class="lib-cat" id="lib-cat"></span>
+        <h2 id="lib-title"></h2>
+        <p class="lib-q" id="lib-q"></p>
+        <div class="lib-answer-row">正解:<span class="lib-answer" id="lib-answer"></span></div>
+        <p class="lib-exp" id="lib-exp"></p>
+        <div class="lib-links-label">関連リンク(Wikipedia)</div>
+        <div class="lib-links" id="lib-links"></div>
+        <button class="btn btn-secondary" id="btn-lib-close">閉じる</button>
       </div>
     </div>
 
