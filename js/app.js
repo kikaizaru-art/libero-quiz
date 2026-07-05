@@ -348,7 +348,7 @@
           </span>
           <span class="category-chev" aria-hidden="true">›</span>
         </button>
-        ${nextIdx >= 0 ? `<button class="category-continue">続きから</button>` : ""}`;
+        ${nextIdx >= 0 ? `<button class="category-continue">${cleared > 0 ? "続きから" : "始める"}</button>` : ""}`;
       el.querySelector(".category-open").addEventListener("click", () => openStages(cat.id));
       const cont = el.querySelector(".category-continue");
       if (cont) cont.addEventListener("click", () => startQuiz(cat.id, nextIdx));
