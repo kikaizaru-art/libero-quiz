@@ -36,6 +36,12 @@
 
       <button class="btn btn-primary btn-big" id="btn-start">学習を始める</button>
 
+      <div class="card review-card">
+        <h2 class="card-title">復習</h2>
+        <p class="review-desc" id="review-desc"></p>
+        <button class="btn btn-secondary btn-review" id="btn-review">復習する</button>
+      </div>
+
       <div class="card stats-card">
         <h2 class="card-title">学習記録</h2>
         <div class="stats-grid" id="home-stats"></div>
@@ -99,6 +105,35 @@
       </div>
     </section>
 
+    <!-- 記録画面 -->
+    <section id="screen-stats" class="screen">
+      <header class="screen-header">
+        <h1>記録</h1>
+        <p>これまでの学習のあゆみ</p>
+      </header>
+      <div class="card">
+        <h2 class="card-title">サマリー</h2>
+        <div class="stats-grid" id="stats-summary"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">学習カレンダー(直近12週)</h2>
+        <div class="heatmap" id="stats-heatmap"></div>
+        <div class="heatmap-legend">
+          <span>少</span>
+          <div class="heatmap-cell l0"></div>
+          <div class="heatmap-cell l1"></div>
+          <div class="heatmap-cell l2"></div>
+          <div class="heatmap-cell l3"></div>
+          <div class="heatmap-cell l4"></div>
+          <span>多</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">分野別正答率</h2>
+        <div id="stats-cats"></div>
+      </div>
+    </section>
+
     <!-- 実績画面 -->
     <section id="screen-badges" class="screen">
       <header class="screen-header">
@@ -112,6 +147,7 @@
     <nav class="bottom-nav" id="bottom-nav">
       <button class="nav-item active" data-screen="screen-home">ホーム</button>
       <button class="nav-item" data-screen="screen-map">学習</button>
+      <button class="nav-item" data-screen="screen-stats">記録</button>
       <button class="nav-item" data-screen="screen-badges">実績</button>
     </nav>
 
