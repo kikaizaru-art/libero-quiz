@@ -113,11 +113,21 @@
 html, body {
   height: 100%;
   font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
-  background: var(--bg);
   color: var(--text);
 }
 
-body { background: var(--bg-grad); background-attachment: fixed; }
+/* 単色の下地は html のみに指定する(body に置くと ::before のグラデーションより手前に描画されてしまう) */
+html { background: var(--bg); }
+
+/* iOS Safari は background-attachment: fixed 非対応のため、固定背景は疑似要素で描画する */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg-grad);
+  pointer-events: none;
+}
 
 #app {
   max-width: 480px;
