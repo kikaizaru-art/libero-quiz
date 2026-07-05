@@ -120,12 +120,8 @@ body { background: var(--bg-grad); background-attachment: fixed; }
 }
 .xp-text { font-size: 11px; color: var(--text-dim); margin-top: 4px; text-align: right; }
 
-.home-hero { text-align: center; margin: 22px 0 14px; }
-.app-title {
-  font-size: 28px; font-weight: 800; letter-spacing: 0.06em;
-  color: var(--text);
-}
-.app-subtitle { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
+.home-hero { text-align: center; margin: 20px 0 12px; }
+.app-subtitle { color: var(--text-dim); font-size: 13px; }
 
 /* ミッション */
 .mission {
@@ -153,6 +149,79 @@ body { background: var(--bg-grad); background-attachment: fixed; }
 .stat { text-align: center; }
 .stat-value { font-size: 20px; font-weight: 800; color: var(--text); }
 .stat-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+/* 復習カード */
+.review-desc { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin-bottom: 12px; }
+.btn-review { width: 100%; font-size: 15px; }
+.btn-review:disabled { opacity: 0.45; cursor: default; }
+.btn-review:disabled:active { transform: none; }
+
+/* ---------- 記録画面:学習カレンダー ---------- */
+.cal-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.cal-tab {
+  flex: 1; border: 1px solid transparent; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 700;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 8px 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.cal-tab.active {
+  color: var(--text);
+  background: rgba(37, 99, 235, 0.3);
+  border-color: rgba(96, 165, 250, 0.6);
+}
+
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-weekdays { margin-bottom: 4px; }
+.cal-head { text-align: center; font-size: 11px; font-weight: 700; color: var(--text-dim); }
+.cal-head.sun { color: #fca5a5; }
+.cal-head.sat { color: #93c5fd; }
+
+.cal-cell {
+  min-height: 46px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px;
+}
+.cal-cell.empty { background: transparent; }
+.cal-cell.future { opacity: 0.35; }
+.cal-day { font-size: 11px; font-weight: 700; color: var(--text-dim); }
+.cal-count { font-size: 10px; font-weight: 700; }
+.cal-cell.l1 { background: #1e40af; }
+.cal-cell.l2 { background: #2563eb; }
+.cal-cell.l3 { background: #60a5fa; }
+.cal-cell.l4 { background: #bfdbfe; }
+.cal-cell.l1 .cal-day, .cal-cell.l2 .cal-day { color: rgba(255, 255, 255, 0.85); }
+.cal-cell.l1 .cal-count, .cal-cell.l2 .cal-count { color: #fff; }
+.cal-cell.l3 .cal-day, .cal-cell.l3 .cal-count,
+.cal-cell.l4 .cal-day, .cal-cell.l4 .cal-count { color: #0f172a; }
+.cal-cell.today { box-shadow: 0 0 0 2px var(--accent); }
+
+.cal-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 12px;
+  font-size: 11px; color: var(--text-dim);
+}
+.cal-legend { display: inline-flex; align-items: center; gap: 4px; }
+.cal-dot { width: 11px; height: 11px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); }
+.cal-dot.l1 { background: #1e40af; }
+.cal-dot.l2 { background: #2563eb; }
+.cal-dot.l3 { background: #60a5fa; }
+.cal-dot.l4 { background: #bfdbfe; }
+
+.cat-rate { padding: 9px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+.cat-rate:last-child { border-bottom: none; padding-bottom: 0; }
+.cat-rate-head { display: flex; justify-content: space-between; align-items: baseline; }
+.cat-rate-name { font-size: 13px; font-weight: 700; }
+.cat-rate-value { font-size: 12px; color: var(--text-dim); }
+.cat-rate-bar {
+  height: 7px; border-radius: 999px; margin-top: 5px;
+  background: rgba(0, 0, 0, 0.35); overflow: hidden;
+}
+.cat-rate-fill { height: 100%; border-radius: 999px; transition: width 0.4s ease; }
 
 /* ---------- 分野マップ ---------- */
 .category-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

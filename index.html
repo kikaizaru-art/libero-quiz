@@ -25,7 +25,6 @@
       </header>
 
       <div class="home-hero">
-        <h1 class="app-title">リベロクイズ</h1>
         <p class="app-subtitle">1日5問、ビジネスパーソンのための教養トレーニング</p>
       </div>
 
@@ -35,6 +34,12 @@
       </div>
 
       <button class="btn btn-primary btn-big" id="btn-start">学習を始める</button>
+
+      <div class="card review-card">
+        <h2 class="card-title">復習</h2>
+        <p class="review-desc" id="review-desc"></p>
+        <button class="btn btn-secondary btn-review" id="btn-review">復習する</button>
+      </div>
 
       <div class="card stats-card">
         <h2 class="card-title">学習記録</h2>
@@ -99,6 +104,48 @@
       </div>
     </section>
 
+    <!-- 記録画面 -->
+    <section id="screen-stats" class="screen">
+      <header class="screen-header">
+        <h1>記録</h1>
+        <p>これまでの学習のあゆみ</p>
+      </header>
+      <div class="card">
+        <h2 class="card-title">サマリー</h2>
+        <div class="stats-grid" id="stats-summary"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">学習カレンダー</h2>
+        <div class="cal-tabs" id="cal-tabs"></div>
+        <div class="cal-grid cal-weekdays">
+          <span class="cal-head sun">日</span>
+          <span class="cal-head">月</span>
+          <span class="cal-head">火</span>
+          <span class="cal-head">水</span>
+          <span class="cal-head">木</span>
+          <span class="cal-head">金</span>
+          <span class="cal-head sat">土</span>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-foot">
+          <span id="cal-today-note"></span>
+          <span class="cal-legend">
+            <span>少</span>
+            <i class="cal-dot l0"></i>
+            <i class="cal-dot l1"></i>
+            <i class="cal-dot l2"></i>
+            <i class="cal-dot l3"></i>
+            <i class="cal-dot l4"></i>
+            <span>多</span>
+          </span>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">分野別正答率</h2>
+        <div id="stats-cats"></div>
+      </div>
+    </section>
+
     <!-- 実績画面 -->
     <section id="screen-badges" class="screen">
       <header class="screen-header">
@@ -112,6 +159,7 @@
     <nav class="bottom-nav" id="bottom-nav">
       <button class="nav-item active" data-screen="screen-home">ホーム</button>
       <button class="nav-item" data-screen="screen-map">学習</button>
+      <button class="nav-item" data-screen="screen-stats">記録</button>
       <button class="nav-item" data-screen="screen-badges">実績</button>
     </nav>
 

@@ -10,6 +10,8 @@
   const CLEAR_BONUS = 20;
   const PERFECT_BONUS = 30;
   const PASS_LINE = 3;          // 5問中3問正解でクリア
+  const REVIEW_SIZE = 5;        // 復習1回あたりの出題数
+  const REVIEW_PERFECT_BONUS = 15;
 
   const MISSIONS = [
     { id: "clear",   name: "ステージを1回クリアする", goal: 1,  reward: 30, key: "clears" },
@@ -21,6 +23,7 @@
     { id: "first_clear", name: "はじめの一歩", desc: "初めてステージをクリア" },
     { id: "perfect",     name: "全問正解", desc: "1ステージを全問正解でクリア" },
     { id: "combo5",      name: "5問連続正解", desc: "5問連続で正解" },
+    { id: "review10",    name: "弱点克服", desc: "復習で10問を克服" },
     { id: "allcats",     name: "全分野着手", desc: "全分野で1ステージ以上クリア" },
     { id: "streak3",     name: "3日連続学習", desc: "3日連続で学習" },
     { id: "streak7",     name: "7日連続学習", desc: "7日連続で学習" },
@@ -42,7 +45,10 @@
       streak: { count: 0, last: null },
       daily: { date: null, clears: 0, correct: 0, combo: 0, claimed: [] },
       badges: [],
-      totals: { answered: 0, correct: 0, perfects: 0, maxCombo: 0, clears: 0 },
+      totals: { answered: 0, correct: 0, perfects: 0, maxCombo: 0, clears: 0, reviewMastered: 0 },
+      wrong: {},                                   // "catId:stageIdx:qIdx" -> { count, last }
+      catStats: {},                                // catId -> { answered, correct }
+      activity: {},                                // "YYYY-MM-DD" -> その日の解答数
     };
   }
 
@@ -50,7 +56,12 @@
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaultState();
-      return Object.assign(defaultState(), JSON.parse(raw));
+      const base = defaultState();
+      const saved = JSON.parse(raw);
+      const merged = Object.assign(base, saved);
+      // 旧バージョンのセーブデータに新フィールドを補完
+      merged.totals = Object.assign(defaultState().totals, saved.totals || {});
+      return merged;
     } catch {
       return defaultState();
     }
@@ -81,9 +92,12 @@
 
   // ---------- 日次処理(ミッション・ストリーク) ----------
 
-  function todayStr() {
-    const d = new Date();
+  function dateStr(d) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function todayStr() {
+    return dateStr(new Date());
   }
 
   function ensureDaily() {
@@ -97,8 +111,7 @@
   function touchStreak() {
     const today = todayStr();
     if (state.streak.last === today) return;
-    const yesterday = new Date(Date.now() - 86400000);
-    const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+    const yStr = dateStr(new Date(Date.now() - 86400000));
     state.streak.count = state.streak.last === yStr ? state.streak.count + 1 : 1;
     state.streak.last = today;
     if (state.streak.count >= 3) awardBadge("streak3");
@@ -161,6 +174,7 @@
     if (state.totals.clears >= 1) awardBadge("first_clear");
     if (state.totals.perfects >= 1) awardBadge("perfect");
     if (state.totals.maxCombo >= 5) awardBadge("combo5");
+    if (state.totals.reviewMastered >= 10) awardBadge("review10");
 
     const clearedAllCats = QUIZ_DATA.every(c =>
       c.stages.some((_, i) => (state.stages[`${c.id}-${i}`] || {}).stars >= 1)
@@ -184,7 +198,7 @@
   function show(screenId) {
     screens.forEach(s => s.classList.toggle("active", s.id === screenId));
     navItems.forEach(n => n.classList.toggle("active", n.dataset.screen === screenId));
-    const navScreens = ["screen-home", "screen-map", "screen-badges", "screen-stages"];
+    const navScreens = ["screen-home", "screen-map", "screen-stats", "screen-badges", "screen-stages"];
     document.getElementById("bottom-nav").style.display =
       navScreens.includes(screenId) ? "flex" : "none";
     window.scrollTo(0, 0);
@@ -235,6 +249,20 @@
     document.getElementById("home-stats").innerHTML = stats.map(s =>
       `<div class="stat"><div class="stat-value">${s.value}</div><div class="stat-label">${s.label}</div></div>`
     ).join("");
+
+    // 復習カード
+    const reviewCount = Object.keys(state.wrong).length;
+    const btnReview = document.getElementById("btn-review");
+    const desc = document.getElementById("review-desc");
+    if (reviewCount > 0) {
+      desc.textContent = `間違えた問題が ${reviewCount}問 あります。正解すればリストから消えます。`;
+      btnReview.textContent = `復習する(${Math.min(reviewCount, REVIEW_SIZE)}問)`;
+      btnReview.disabled = false;
+    } else {
+      desc.textContent = "復習する問題はありません。間違えた問題がここに溜まります。";
+      btnReview.textContent = "復習する";
+      btnReview.disabled = true;
+    }
   }
 
   // ---------- 分野マップ描画 ----------
@@ -293,7 +321,9 @@
 
   // ---------- クイズ本体 ----------
 
-  let quiz = null; // { catId, stageIdx, order, index, correct, combo, maxCombo, xp }
+  // mode: "stage"(通常) | "review"(復習)
+  // items: [{ catId, stageIdx, qIdx }]
+  let quiz = null; // { mode, catId, stageIdx, items, index, correct, combo, maxCombo, xp, mastered }
 
   function shuffle(arr) {
     const a = arr.slice();
@@ -306,29 +336,49 @@
 
   function startQuiz(catId, stageIdx) {
     const cat = QUIZ_DATA.find(c => c.id === catId);
+    const items = shuffle(cat.stages[stageIdx].questions.map((_, i) => ({ catId, stageIdx, qIdx: i })));
     quiz = {
-      catId, stageIdx,
-      order: shuffle(cat.stages[stageIdx].questions.map((_, i) => i)),
-      index: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0,
+      mode: "stage", catId, stageIdx, items,
+      index: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, mastered: 0,
     };
     show("screen-quiz");
     renderQuestion();
   }
 
+  function startReview() {
+    const keys = shuffle(Object.keys(state.wrong)).slice(0, REVIEW_SIZE);
+    if (keys.length === 0) return;
+    const items = keys.map(k => {
+      const [catId, stageIdx, qIdx] = k.split(":");
+      return { catId, stageIdx: Number(stageIdx), qIdx: Number(qIdx) };
+    });
+    quiz = {
+      mode: "review", catId: null, stageIdx: null, items,
+      index: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, mastered: 0,
+    };
+    show("screen-quiz");
+    renderQuestion();
+  }
+
+  function questionAt(item) {
+    const cat = QUIZ_DATA.find(c => c.id === item.catId);
+    return cat.stages[item.stageIdx].questions[item.qIdx];
+  }
+
   function currentQuestion() {
-    const cat = QUIZ_DATA.find(c => c.id === quiz.catId);
-    return cat.stages[quiz.stageIdx].questions[quiz.order[quiz.index]];
+    return questionAt(quiz.items[quiz.index]);
   }
 
   function renderQuestion() {
-    const cat = QUIZ_DATA.find(c => c.id === quiz.catId);
-    const stage = cat.stages[quiz.stageIdx];
+    const item = quiz.items[quiz.index];
+    const cat = QUIZ_DATA.find(c => c.id === item.catId);
     const q = currentQuestion();
-    const total = quiz.order.length;
+    const total = quiz.items.length;
 
     document.getElementById("quiz-progress-fill").style.width = `${(quiz.index / total) * 100}%`;
-    document.getElementById("quiz-meta").textContent =
-      `${cat.name} ${stage.name} ・ 第${quiz.index + 1}問 / 全${total}問`;
+    document.getElementById("quiz-meta").textContent = quiz.mode === "review"
+      ? `復習(${cat.name}) ・ 第${quiz.index + 1}問 / 全${total}問`
+      : `${cat.name} ${cat.stages[item.stageIdx].name} ・ 第${quiz.index + 1}問 / 全${total}問`;
     document.getElementById("question-text").textContent = q.q;
 
     const comboBadge = document.getElementById("combo-badge");
@@ -356,6 +406,8 @@
 
   function answer(choiceIdx, clickedBtn) {
     const q = currentQuestion();
+    const item = quiz.items[quiz.index];
+    const wrongKey = `${item.catId}:${item.stageIdx}:${item.qIdx}`;
     const isCorrect = choiceIdx === q.answer;
     const buttons = document.querySelectorAll("#choices .choice");
     buttons.forEach(b => {
@@ -365,6 +417,30 @@
     });
 
     state.totals.answered++;
+
+    // 分野別成績・日別解答数(記録画面用)
+    const cs = state.catStats[item.catId] || (state.catStats[item.catId] = { answered: 0, correct: 0 });
+    cs.answered++;
+    if (isCorrect) cs.correct++;
+    const today = todayStr();
+    state.activity[today] = (state.activity[today] || 0) + 1;
+
+    // 復習リストの更新:間違えたら追加、正解したら除去
+    if (isCorrect) {
+      if (state.wrong[wrongKey]) {
+        delete state.wrong[wrongKey];
+        if (quiz.mode === "review") {
+          quiz.mastered++;
+          state.totals.reviewMastered++;
+        }
+      }
+    } else {
+      const entry = state.wrong[wrongKey] || { count: 0, last: null };
+      entry.count++;
+      entry.last = today;
+      state.wrong[wrongKey] = entry;
+    }
+
     if (isCorrect) {
       quiz.correct++;
       quiz.combo++;
@@ -389,18 +465,18 @@
     verdict.className = `explanation-verdict ${isCorrect ? "good" : "bad"}`;
     document.getElementById("explanation-text").textContent = q.exp;
     document.getElementById("btn-next").textContent =
-      quiz.index + 1 < quiz.order.length ? "次へ" : "結果を見る";
+      quiz.index + 1 < quiz.items.length ? "次へ" : "結果を見る";
     document.getElementById("explanation").classList.remove("hidden");
 
     document.getElementById("quiz-progress-fill").style.width =
-      `${((quiz.index + 1) / quiz.order.length) * 100}%`;
+      `${((quiz.index + 1) / quiz.items.length) * 100}%`;
 
     saveState();
   }
 
   document.getElementById("btn-next").addEventListener("click", () => {
     quiz.index++;
-    if (quiz.index < quiz.order.length) renderQuestion();
+    if (quiz.index < quiz.items.length) renderQuestion();
     else finishQuiz();
   });
 
@@ -413,8 +489,48 @@
     return 0;
   }
 
+  function renderResultXp(earnedXp) {
+    document.getElementById("result-xp").textContent = `+${earnedXp} XP`;
+    const info = levelInfo(state.xp);
+    document.getElementById("result-xp-fill").style.width = `${(info.current / info.needed) * 100}%`;
+    document.getElementById("result-xp-text").textContent =
+      `Lv.${info.level} ・ 次のレベルまで あと${info.needed - info.current}XP`;
+  }
+
+  function finishReview() {
+    const total = quiz.items.length;
+    let earnedXp = quiz.xp;
+    if (quiz.correct === total) earnedXp += REVIEW_PERFECT_BONUS;
+
+    touchStreak();
+    gainXp(earnedXp);
+    checkMissions();
+    checkCollectionBadges();
+    saveState();
+
+    document.getElementById("result-title").textContent = "復習完了";
+    document.getElementById("result-stars").classList.add("hidden");
+    document.getElementById("result-score").textContent =
+      `${total}問中 ${quiz.correct}問正解` +
+      (quiz.mastered > 0 ? ` ・ ${quiz.mastered}問を克服` : "");
+    renderResultXp(earnedXp);
+
+    const remaining = Object.keys(state.wrong).length;
+    const btnRetry = document.getElementById("btn-retry");
+    btnRetry.classList.toggle("hidden", remaining === 0);
+    btnRetry.textContent = "続けて復習";
+    btnRetry.onclick = () => startReview();
+    const btnContinue = document.getElementById("btn-continue");
+    btnContinue.textContent = "ホームへ";
+    btnContinue.onclick = () => { show("screen-home"); render(); };
+
+    show("screen-result");
+  }
+
   function finishQuiz() {
-    const total = quiz.order.length;
+    if (quiz.mode === "review") { finishReview(); return; }
+
+    const total = quiz.items.length;
     const stars = starsFor(quiz.correct, total);
     const cleared = stars >= 1;
     const perfect = quiz.correct === total;
@@ -445,17 +561,19 @@
     // 画面描画
     document.getElementById("result-title").textContent =
       perfect ? "全問正解" : cleared ? "ステージクリア" : "クリアまであと一歩";
-    document.getElementById("result-stars").innerHTML =
+    const starsEl = document.getElementById("result-stars");
+    starsEl.classList.remove("hidden");
+    starsEl.innerHTML =
       [1, 2, 3].map(i => `<span class="star${i <= stars ? " earned" : ""}">★</span>`).join("");
     document.getElementById("result-score").textContent =
       `${total}問中 ${quiz.correct}問正解 ・ 最大${quiz.maxCombo}問連続正解` +
       (cleared ? "" : ` (${PASS_LINE}問正解でクリア)`);
-    document.getElementById("result-xp").textContent = `+${earnedXp} XP`;
+    renderResultXp(earnedXp);
 
-    const info = levelInfo(state.xp);
-    document.getElementById("result-xp-fill").style.width = `${(info.current / info.needed) * 100}%`;
-    document.getElementById("result-xp-text").textContent =
-      `Lv.${info.level} ・ 次のレベルまで あと${info.needed - info.current}XP`;
+    const btnRetry = document.getElementById("btn-retry");
+    btnRetry.classList.remove("hidden");
+    btnRetry.textContent = "再挑戦";
+    btnRetry.onclick = () => startQuiz(quiz.catId, quiz.stageIdx);
 
     // 「つづける」ボタンの行き先:次ステージがあればそこへ
     const cat = QUIZ_DATA.find(c => c.id === quiz.catId);
@@ -470,10 +588,6 @@
 
     show("screen-result");
   }
-
-  document.getElementById("btn-retry").addEventListener("click", () => {
-    startQuiz(quiz.catId, quiz.stageIdx);
-  });
 
   // ---------- バッジ描画 ----------
 
@@ -494,6 +608,107 @@
     }
   }
 
+  // ---------- 記録画面 ----------
+
+  function renderStats() {
+    // サマリー
+    const learnedDays = Object.keys(state.activity).length;
+    const rate = state.totals.answered > 0
+      ? Math.round((state.totals.correct / state.totals.answered) * 100) : 0;
+    const summary = [
+      { value: learnedDays, label: "学習日数" },
+      { value: `${state.streak.count}日`, label: "連続学習" },
+      { value: state.totals.answered, label: "累計解答" },
+      { value: state.totals.correct, label: "累計正解" },
+      { value: `${rate}%`, label: "正答率" },
+      { value: Object.keys(state.wrong).length, label: "復習待ち" },
+    ];
+    document.getElementById("stats-summary").innerHTML = summary.map(s =>
+      `<div class="stat"><div class="stat-value">${s.value}</div><div class="stat-label">${s.label}</div></div>`
+    ).join("");
+
+    renderCalendar();
+
+    // 分野別正答率
+    renderCatRates();
+  }
+
+  // ---------- 学習カレンダー(月別) ----------
+
+  const CAL_MONTHS = 6;          // タブに出す月数(当月含む直近6ヶ月)
+  let calSelected = null;        // "YYYY-M"(月は0始まり)。nullなら当月
+
+  function activityLevel(n) {
+    return n === 0 ? 0 : n < 5 ? 1 : n < 10 ? 2 : n < 20 ? 3 : 4;
+  }
+
+  function renderCalendar() {
+    const now = new Date();
+    const currentKey = `${now.getFullYear()}-${now.getMonth()}`;
+    if (calSelected === null) calSelected = currentKey;
+
+    // 月タブ(当月含む直近6ヶ月)
+    const tabsEl = document.getElementById("cal-tabs");
+    let tabs = "";
+    for (let i = CAL_MONTHS - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      tabs += `<button class="cal-tab${key === calSelected ? " active" : ""}" data-key="${key}">${d.getMonth() + 1}月</button>`;
+    }
+    tabsEl.innerHTML = tabs;
+    tabsEl.querySelectorAll(".cal-tab").forEach(btn =>
+      btn.addEventListener("click", () => {
+        calSelected = btn.dataset.key;
+        renderCalendar();
+      })
+    );
+
+    // カレンダー本体
+    const [y, m] = calSelected.split("-").map(Number);
+    const firstDay = new Date(y, m, 1).getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const todayKey = todayStr();
+    let cells = "";
+    for (let i = 0; i < firstDay; i++) cells += `<div class="cal-cell empty"></div>`;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(y, m, day);
+      const key = dateStr(date);
+      const n = state.activity[key] || 0;
+      const cls = [
+        "cal-cell", `l${activityLevel(n)}`,
+        key === todayKey ? "today" : "",
+        date > now ? "future" : "",
+      ].filter(Boolean).join(" ");
+      cells += `
+        <div class="${cls}">
+          <span class="cal-day">${day}</span>
+          ${n > 0 ? `<span class="cal-count">${n}問</span>` : ""}
+        </div>`;
+    }
+    document.getElementById("cal-grid").innerHTML = cells;
+
+    // 今日の学習量をひとことで
+    const todayN = state.activity[todayKey] || 0;
+    document.getElementById("cal-today-note").textContent =
+      todayN > 0 ? `今日は ${todayN}問 解答しました` : "今日はまだ解答していません";
+  }
+
+  function renderCatRates() {
+    document.getElementById("stats-cats").innerHTML = QUIZ_DATA.map(cat => {
+      const cs = state.catStats[cat.id] || { answered: 0, correct: 0 };
+      const pct = cs.answered > 0 ? Math.round((cs.correct / cs.answered) * 100) : 0;
+      const detail = cs.answered > 0 ? `${pct}%(${cs.correct}/${cs.answered})` : "未学習";
+      return `
+        <div class="cat-rate">
+          <div class="cat-rate-head">
+            <span class="cat-rate-name">${cat.name}</span>
+            <span class="cat-rate-value">${detail}</span>
+          </div>
+          <div class="cat-rate-bar"><div class="cat-rate-fill" style="width:${pct}%;background:${cat.color}"></div></div>
+        </div>`;
+    }).join("");
+  }
+
   // ---------- 共通イベント ----------
 
   document.getElementById("btn-start").addEventListener("click", () => {
@@ -506,10 +721,16 @@
   });
   document.getElementById("btn-quiz-quit").addEventListener("click", () => {
     if (confirm("クイズを中断しますか?(進行中の記録は保存されません)")) {
-      renderStages();
-      show("screen-stages");
+      if (quiz && quiz.mode === "review") {
+        show("screen-home");
+        render();
+      } else {
+        renderStages();
+        show("screen-stages");
+      }
     }
   });
+  document.getElementById("btn-review").addEventListener("click", () => startReview());
   document.getElementById("btn-levelup-close").addEventListener("click", () => {
     document.getElementById("levelup-overlay").classList.add("hidden");
   });
@@ -517,6 +738,7 @@
   function render() {
     renderHome();
     renderMap();
+    renderStats();
     renderBadges();
   }
 
