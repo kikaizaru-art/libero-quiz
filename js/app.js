@@ -313,11 +313,8 @@
 
     renderToday();
 
-    // 本日の目標(1行サマリー+展開)
+    // 本日の目標
     const doneCount = MISSIONS.filter(m => state.daily.claimed.includes(m.id)).length;
-    document.getElementById("missions-dots").innerHTML = MISSIONS.map(m =>
-      `<i class="${state.daily.claimed.includes(m.id) ? "done" : ""}"></i>`
-    ).join("");
     document.getElementById("missions-count").textContent = `${doneCount}/${MISSIONS.length} 達成`;
 
     const missionList = document.getElementById("mission-list");
@@ -347,14 +344,6 @@
         `復習する(${Math.min(reviewCount, REVIEW_SIZE)}問)`;
     }
   }
-
-  // 本日の目標の展開/折りたたみ
-  document.getElementById("missions-toggle").addEventListener("click", () => {
-    const card = document.getElementById("missions-card");
-    const open = card.classList.toggle("open");
-    document.getElementById("mission-list").classList.toggle("hidden", !open);
-    document.getElementById("missions-toggle").setAttribute("aria-expanded", String(open));
-  });
 
   // ---------- 学習(分野一覧)描画 ----------
 
