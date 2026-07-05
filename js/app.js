@@ -12,7 +12,8 @@
   const PASS_LINE = 3;          // 5問中3問正解でクリア
   const REVIEW_SIZE = 5;        // 復習1回あたりの出題数
   const REVIEW_PERFECT_BONUS = 15;
-  const FREE_SIZE = 5;          // ランダム出題(全ステージ制覇後)の出題数
+  const DAILY_SIZE = 5;         // 「今日の5問」の出題数
+  const DAILY_BONUS = 20;       // 「今日の5問」を初回クリアしたときのボーナスXP
 
   const MISSIONS = [
     { id: "clear",   name: "ステージを1回クリアする", goal: 1,  reward: 30, key: "clears" },
@@ -44,7 +45,7 @@
       xp: 0,
       stages: {},                                  // "catId-stageIdx" -> { stars, best }
       streak: { count: 0, last: null },
-      daily: { date: null, clears: 0, correct: 0, combo: 0, claimed: [] },
+      daily: { date: null, clears: 0, correct: 0, combo: 0, claimed: [], todayDone: false },
       badges: [],
       totals: { answered: 0, correct: 0, perfects: 0, maxCombo: 0, clears: 0, reviewMastered: 0 },
       wrong: {},                                   // "catId:stageIdx:qIdx" -> { count, last }
@@ -136,7 +137,7 @@
   function ensureDaily() {
     const today = todayStr();
     if (state.daily.date !== today) {
-      state.daily = { date: today, clears: 0, correct: 0, combo: 0, claimed: [] };
+      state.daily = { date: today, clears: 0, correct: 0, combo: 0, claimed: [], todayDone: false };
       saveState();
     }
   }
@@ -238,29 +239,81 @@
     return cat.stages.findIndex((_, i) => stageRecord(cat.id, i).stars === 0 && isUnlocked(cat, i));
   }
 
-  // 「今日の5問」の出題先を決める
+  // 「学習を進める」の行き先を決める(今日の5問とは独立したステージ学習)
   // 1. 前回挑戦したステージが未クリアならその続き
   // 2. 同分野の次の未クリアステージ
   // 3. 全分野を順に見て最初の未クリアステージ
-  // 4. すべてクリア済み → 復習待ちがあれば復習、なければランダム5問
-  function pickTodayTarget() {
+  // 4. すべてクリア済みなら null
+  function pickLearnTarget() {
     if (state.lastStage) {
       const cat = QUIZ_DATA.find(c => c.id === state.lastStage.catId);
       if (cat) {
         const i = state.lastStage.stageIdx;
         if (i < cat.stages.length && stageRecord(cat.id, i).stars === 0 && isUnlocked(cat, i)) {
-          return { type: "stage", catId: cat.id, stageIdx: i, resumed: true };
+          return { catId: cat.id, stageIdx: i, resumed: true };
         }
         const next = nextStageIn(cat);
-        if (next >= 0) return { type: "stage", catId: cat.id, stageIdx: next, resumed: false };
+        if (next >= 0) return { catId: cat.id, stageIdx: next, resumed: false };
       }
     }
     for (const cat of QUIZ_DATA) {
       const i = nextStageIn(cat);
-      if (i >= 0) return { type: "stage", catId: cat.id, stageIdx: i, resumed: false };
+      if (i >= 0) return { catId: cat.id, stageIdx: i, resumed: false };
     }
-    if (Object.keys(state.wrong).length > 0) return { type: "review" };
-    return { type: "free" };
+    return null;
+  }
+
+  // ---------- 「今日の5問」(日替わり・全分野ミックス) ----------
+
+  // 日付文字列から決まる乱数列。同じ日は何度開いても同じ問題セットになる
+  function seededRandom(seedStr) {
+    let h = 2166136261;
+    for (let i = 0; i < seedStr.length; i++) {
+      h ^= seedStr.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return () => {
+      h += 0x6D2B79F5;
+      let t = h;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function shuffleWith(arr, rnd) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // 今日の5問:日替わりで分野をシャッフルし、5分野から1問ずつ選ぶ
+  // ステージ進捗や解放状況とは無関係に全問題から出題する
+  function dailyItems() {
+    const rnd = seededRandom(`daily-${todayStr()}`);
+    const cats = shuffleWith(QUIZ_DATA, rnd).slice(0, DAILY_SIZE);
+    const items = cats.map(cat => {
+      const pool = [];
+      cat.stages.forEach((stage, si) =>
+        stage.questions.forEach((_, qi) => pool.push({ catId: cat.id, stageIdx: si, qIdx: qi }))
+      );
+      return pool[Math.floor(rnd() * pool.length)];
+    });
+    // 分野数が足りない場合は全問題から補充
+    while (items.length < DAILY_SIZE) {
+      const all = [];
+      QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+        stage.questions.forEach((_, qi) => all.push({ catId: cat.id, stageIdx: si, qIdx: qi }))
+      ));
+      const pick = all[Math.floor(rnd() * all.length)];
+      if (!items.some(it => it.catId === pick.catId && it.stageIdx === pick.stageIdx && it.qIdx === pick.qIdx)) {
+        items.push(pick);
+      }
+    }
+    return items;
   }
 
   // ---------- 画面遷移 ----------
@@ -285,22 +338,30 @@
   // ---------- ホーム描画 ----------
 
   function renderToday() {
-    const t = pickTodayTarget();
+    ensureDaily();
     const desc = document.getElementById("today-desc");
     const btn = document.getElementById("btn-start");
-    if (t.type === "stage") {
-      const cat = QUIZ_DATA.find(c => c.id === t.catId);
-      const stage = cat.stages[t.stageIdx];
-      desc.textContent = `${cat.name} ステージ${t.stageIdx + 1}(${stage.name})${t.resumed ? "の続きから" : "に挑戦"}`;
-      btn.textContent = "始める";
-    } else if (t.type === "review") {
-      const n = Math.min(Object.keys(state.wrong).length, REVIEW_SIZE);
-      desc.textContent = `未クリアのステージはありません。復習${n}問で弱点を克服しましょう`;
-      btn.textContent = "復習を始める";
+    const catNames = [...new Set(dailyItems().map(it => QUIZ_DATA.find(c => c.id === it.catId).name))];
+    if (state.daily.todayDone) {
+      desc.textContent = `今日の5問はクリア済みです。もう一度挑戦してXPを稼げます(${catNames.join("・")})`;
+      btn.textContent = "もう一度挑戦";
     } else {
-      desc.textContent = "全ステージクリア済み。全分野からランダムに5問出題します";
+      desc.textContent = `いろいろな分野から日替わりで5問出題(今日は ${catNames.join("・")})`;
       btn.textContent = "始める";
     }
+  }
+
+  // 「学習を進める」カード(ステージ学習の続き)
+  function renderLearnCard() {
+    const t = pickLearnTarget();
+    const card = document.getElementById("home-learn-card");
+    card.classList.toggle("hidden", !t);
+    if (!t) return;
+    const cat = QUIZ_DATA.find(c => c.id === t.catId);
+    const stage = cat.stages[t.stageIdx];
+    document.getElementById("learn-desc").textContent =
+      `${cat.name} ステージ${t.stageIdx + 1}(${stage.name})${t.resumed ? "の続きから" : "に挑戦"}`;
+    document.getElementById("btn-learn").textContent = t.resumed ? "続きから" : "始める";
   }
 
   function renderHome() {
@@ -312,6 +373,7 @@
     document.getElementById("home-xp-text").textContent = `${info.current} / ${info.needed} XP`;
 
     renderToday();
+    renderLearnCard();
 
     // 本日の目標
     const doneCount = MISSIONS.filter(m => state.daily.claimed.includes(m.id)).length;
@@ -412,7 +474,7 @@
 
   // ---------- クイズ本体 ----------
 
-  // mode: "stage"(通常) | "review"(復習) | "free"(ランダム出題)
+  // mode: "stage"(通常) | "review"(復習) | "daily"(今日の5問)
   // items: [{ catId, stageIdx, qIdx }]
   let quiz = null; // { mode, catId, stageIdx, items, index, correct, combo, maxCombo, xp, mastered, wrongList }
 
@@ -456,22 +518,11 @@
     renderQuestion();
   }
 
-  function startFree() {
-    const all = [];
-    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
-      stage.questions.forEach((_, qi) => all.push({ catId: cat.id, stageIdx: si, qIdx: qi }))
-    ));
-    quiz = newQuiz("free", null, null, shuffle(all).slice(0, FREE_SIZE));
+  // 「今日の5問」開始:日替わりセットを毎回シャッフルして出題
+  function startDaily() {
+    quiz = newQuiz("daily", null, null, shuffle(dailyItems()));
     show("screen-quiz");
     renderQuestion();
-  }
-
-  // 「今日の5問」開始
-  function startToday() {
-    const t = pickTodayTarget();
-    if (t.type === "stage") startQuiz(t.catId, t.stageIdx);
-    else if (t.type === "review") startReview();
-    else startFree();
   }
 
   function questionAt(item) {
@@ -499,7 +550,7 @@
     document.getElementById("quiz-progress-fill").style.width = `${(quiz.index / total) * 100}%`;
     document.getElementById("quiz-progress-text").textContent = `${quiz.index + 1}/${total}`;
     const metaPrefix = quiz.mode === "review" ? `復習(${cat.name})`
-      : quiz.mode === "free" ? `ランダム出題(${cat.name})`
+      : quiz.mode === "daily" ? `今日の5問(${cat.name})`
       : `${cat.name} ${cat.stages[item.stageIdx].name}`;
     document.getElementById("quiz-meta").textContent =
       `${metaPrefix} ・ 第${quiz.index + 1}問 / 全${total}問`;
@@ -639,11 +690,22 @@
       : "間違えた問題は復習リストに追加しました。復習タブからいつでも挑戦できます。";
   }
 
-  // 復習・ランダム出題のリザルト(ステージ記録なし)
+  // 復習・今日の5問のリザルト(ステージ記録なし)
   function finishLight(mode) {
     const total = quiz.items.length;
     let earnedXp = quiz.xp;
     if (quiz.correct === total) earnedXp += REVIEW_PERFECT_BONUS;
+
+    // 今日の5問:その日の初回クリアにボーナス
+    let dailyFirst = false;
+    if (mode === "daily") {
+      ensureDaily();
+      if (!state.daily.todayDone) {
+        state.daily.todayDone = true;
+        dailyFirst = true;
+        earnedXp += DAILY_BONUS;
+      }
+    }
 
     touchStreak();
     gainXp(earnedXp);
@@ -652,11 +714,12 @@
     saveState();
 
     document.getElementById("result-title").textContent =
-      mode === "review" ? "復習完了" : "5問チャレンジ完了";
+      mode === "review" ? "復習完了" : "今日の5問 完了";
     document.getElementById("result-stars").classList.add("hidden");
     document.getElementById("result-score").textContent =
       `${total}問中 ${quiz.correct}問正解` +
-      (mode === "review" && quiz.mastered > 0 ? ` ・ ${quiz.mastered}問を克服` : "");
+      (mode === "review" && quiz.mastered > 0 ? ` ・ ${quiz.mastered}問を克服` : "") +
+      (dailyFirst ? ` ・ 初回クリアボーナス +${DAILY_BONUS}XP` : "");
     renderResultXp(earnedXp);
     renderRecap();
 
@@ -668,8 +731,8 @@
       btnRetry.onclick = () => startReview();
     } else {
       btnRetry.classList.remove("hidden");
-      btnRetry.textContent = "もう5問";
-      btnRetry.onclick = () => startFree();
+      btnRetry.textContent = "もう一度挑戦";
+      btnRetry.onclick = () => startDaily();
     }
     const btnContinue = document.getElementById("btn-continue");
     btnContinue.textContent = "ホームへ";
@@ -1026,7 +1089,11 @@
 
   // ---------- 共通イベント ----------
 
-  document.getElementById("btn-start").addEventListener("click", () => startToday());
+  document.getElementById("btn-start").addEventListener("click", () => startDaily());
+  document.getElementById("btn-learn").addEventListener("click", () => {
+    const t = pickLearnTarget();
+    if (t) startQuiz(t.catId, t.stageIdx);
+  });
   document.getElementById("btn-review").addEventListener("click", () => startReview());
   document.getElementById("btn-review-start").addEventListener("click", () => startReview());
   document.getElementById("btn-stages-back").addEventListener("click", () => {
