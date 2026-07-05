@@ -140,7 +140,8 @@
         <h1>ライブラリ</h1>
         <p id="library-sub"></p>
       </header>
-      <p class="library-note">クイズで出会った問題が知識カードとして集まります。カードを開くと、問題・解説・関連リンクをいつでも見返せます。</p>
+      <p class="library-note">クイズで出会った問題が知識カードとして集まります。カードを開くと、解説と「もっと知る」コラムをいつでも見返せます。</p>
+      <div class="library-tabs" id="library-tabs" role="tablist" aria-label="分野の切り替え"></div>
       <div id="library-list"></div>
     </section>
 
@@ -248,7 +249,10 @@
     <div class="explanation-sheet" id="explanation" role="region" aria-label="解説">
       <div class="explanation-verdict" id="explanation-verdict"></div>
       <p id="explanation-text"></p>
-      <div class="explanation-links hidden" id="explanation-links"></div>
+      <div class="explanation-more hidden" id="explanation-more">
+        <button class="explanation-more-btn" id="btn-more" aria-expanded="false"></button>
+        <p class="explanation-more-text hidden" id="explanation-more-text"></p>
+      </div>
       <button class="btn btn-primary" id="btn-next">次へ</button>
     </div>
 
@@ -287,8 +291,8 @@
         <p class="lib-q" id="lib-q"></p>
         <div class="lib-answer-row">正解:<span class="lib-answer" id="lib-answer"></span></div>
         <p class="lib-exp" id="lib-exp"></p>
-        <div class="lib-links-label">関連リンク(Wikipedia)</div>
-        <div class="lib-links" id="lib-links"></div>
+        <div class="lib-more-label">もっと知る</div>
+        <p class="lib-more" id="lib-more"></p>
         <button class="btn btn-secondary" id="btn-lib-close">閉じる</button>
       </div>
     </div>

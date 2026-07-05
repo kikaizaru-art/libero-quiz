@@ -644,14 +644,15 @@
     verdict.className = `explanation-verdict ${isCorrect ? "good" : "bad"}`;
     document.getElementById("explanation-text").textContent = q.exp;
 
-    // 正解に関連する外部リンク(ライブラリにも収録)
-    const linksEl = document.getElementById("explanation-links");
-    if (q.lib && q.lib.links.length > 0) {
-      linksEl.innerHTML =
-        `<div class="explanation-links-label">「${q.lib.title}」をもっと知る</div>${libLinksHtml(q)}`;
-      linksEl.classList.remove("hidden");
+    // 「もっと知る」コラム(タップで展開。ライブラリにも収録)
+    const moreWrap = document.getElementById("explanation-more");
+    if (q.lib && q.lib.more) {
+      document.getElementById("btn-more").textContent = `もっと知る:${q.lib.title}`;
+      document.getElementById("explanation-more-text").textContent = q.lib.more;
+      setMoreOpen(false);
+      moreWrap.classList.remove("hidden");
     } else {
-      linksEl.classList.add("hidden");
+      moreWrap.classList.add("hidden");
     }
 
     document.getElementById("btn-next").textContent =
@@ -663,6 +664,18 @@
 
     saveState();
   }
+
+  // 「もっと知る」の開閉
+  function setMoreOpen(open) {
+    document.getElementById("explanation-more-text").classList.toggle("hidden", !open);
+    const btn = document.getElementById("btn-more");
+    btn.setAttribute("aria-expanded", String(open));
+    btn.classList.toggle("open", open);
+  }
+
+  document.getElementById("btn-more").addEventListener("click", () => {
+    setMoreOpen(document.getElementById("explanation-more-text").classList.contains("hidden"));
+  });
 
   document.getElementById("btn-next").addEventListener("click", () => {
     quiz.index++;
@@ -879,62 +892,80 @@
 
   // ---------- ライブラリ ----------
 
-  // 外部リンクのチップHTML(解説シート・ライブラリ詳細で共用)
-  function libLinksHtml(q) {
-    return q.lib.links.map(l =>
-      `<a class="lib-link" href="${l.url}" target="_blank" rel="noopener">${l.label}<span class="lib-link-ext" aria-hidden="true">↗</span></a>`
-    ).join("");
+  let libSelected = QUIZ_DATA[0].id; // 表示中の分野タブ
+
+  // 分野内の各問題の解放状況を集計する
+  function libRowsFor(cat) {
+    const rows = [];
+    cat.stages.forEach((stage, si) => {
+      stage.questions.forEach((q, qi) => {
+        rows.push({ seen: !!state.seen[`${cat.id}:${si}:${qi}`], q, stageName: stage.name });
+      });
+    });
+    return rows;
   }
 
   // 出題形式を問わず、一度解答した問題の知識カードが解放される
   function renderLibrary() {
     let total = 0, found = 0;
-    const list = document.getElementById("library-list");
-    list.innerHTML = "";
 
+    // 分野タブ
+    const tabsEl = document.getElementById("library-tabs");
+    tabsEl.innerHTML = "";
     for (const cat of QUIZ_DATA) {
-      const rows = [];
-      cat.stages.forEach((stage, si) => {
-        stage.questions.forEach((q, qi) => {
-          total++;
-          const seen = !!state.seen[`${cat.id}:${si}:${qi}`];
-          if (seen) found++;
-          rows.push({ seen, q, stageName: stage.name });
-        });
+      const rows = libRowsFor(cat);
+      total += rows.length;
+      found += rows.filter(r => r.seen).length;
+      const btn = document.createElement("button");
+      btn.className = `library-tab${cat.id === libSelected ? " active" : ""}`;
+      btn.style.setProperty("--cat-color", cat.color);
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", String(cat.id === libSelected));
+      btn.textContent = cat.name;
+      btn.addEventListener("click", () => {
+        libSelected = cat.id;
+        renderLibrary();
       });
-
-      const card = document.createElement("div");
-      card.className = "card library-cat";
-      card.style.setProperty("--cat-color", cat.color);
-      card.innerHTML = `
-        <div class="library-cat-head">
-          <span class="library-cat-name">${cat.name}</span>
-          <span class="library-cat-count">${rows.filter(r => r.seen).length}/${rows.length}</span>
-        </div>`;
-      for (const r of rows) {
-        if (r.seen) {
-          const btn = document.createElement("button");
-          btn.className = "library-item";
-          btn.innerHTML = `
-            <span class="library-item-title">${r.q.lib.title}</span>
-            <span class="library-item-sub">${r.stageName}</span>
-            <span class="library-item-chev" aria-hidden="true">›</span>`;
-          btn.addEventListener("click", () => openLibEntry(cat, r.q));
-          card.appendChild(btn);
-        } else {
-          const div = document.createElement("div");
-          div.className = "library-item locked";
-          div.innerHTML = `
-            <span class="library-item-title">???</span>
-            <span class="library-item-sub">${r.stageName}</span>`;
-          card.appendChild(div);
-        }
-      }
-      list.appendChild(card);
+      tabsEl.appendChild(btn);
     }
 
     document.getElementById("library-sub").textContent =
       `集めた知識カード ${found} / ${total}`;
+
+    // 選択中の分野のみ表示
+    const cat = QUIZ_DATA.find(c => c.id === libSelected) || QUIZ_DATA[0];
+    const rows = libRowsFor(cat);
+    const list = document.getElementById("library-list");
+    list.innerHTML = "";
+
+    const card = document.createElement("div");
+    card.className = "card library-cat";
+    card.style.setProperty("--cat-color", cat.color);
+    card.innerHTML = `
+      <div class="library-cat-head">
+        <span class="library-cat-name">${cat.name}</span>
+        <span class="library-cat-count">${rows.filter(r => r.seen).length}/${rows.length}</span>
+      </div>`;
+    for (const r of rows) {
+      if (r.seen) {
+        const btn = document.createElement("button");
+        btn.className = "library-item";
+        btn.innerHTML = `
+          <span class="library-item-title">${r.q.lib.title}</span>
+          <span class="library-item-sub">${r.stageName}</span>
+          <span class="library-item-chev" aria-hidden="true">›</span>`;
+        btn.addEventListener("click", () => openLibEntry(cat, r.q));
+        card.appendChild(btn);
+      } else {
+        const div = document.createElement("div");
+        div.className = "library-item locked";
+        div.innerHTML = `
+          <span class="library-item-title">???</span>
+          <span class="library-item-sub">${r.stageName}</span>`;
+        card.appendChild(div);
+      }
+    }
+    list.appendChild(card);
   }
 
   // ライブラリ詳細(問題・正解・解説・関連リンク)
@@ -948,7 +979,7 @@
     document.getElementById("lib-q").textContent = q.q;
     document.getElementById("lib-answer").textContent = q.choices[q.answer];
     document.getElementById("lib-exp").textContent = q.exp;
-    document.getElementById("lib-links").innerHTML = libLinksHtml(q);
+    document.getElementById("lib-more").textContent = q.lib.more;
     libOverlay.classList.remove("hidden");
   }
 
