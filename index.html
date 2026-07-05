@@ -116,25 +116,27 @@
         <div class="stats-grid" id="stats-summary"></div>
       </div>
       <div class="card">
-        <h2 class="card-title">学習カレンダー(直近12週)</h2>
-        <div class="heatmap-wrap">
-          <div class="heatmap-days">
-            <span></span><span>月</span><span></span><span>水</span><span></span><span>金</span><span></span>
-          </div>
-          <div class="heatmap-main">
-            <div class="heatmap-months" id="stats-months"></div>
-            <div class="heatmap" id="stats-heatmap"></div>
-          </div>
+        <h2 class="card-title">学習カレンダー</h2>
+        <div class="cal-tabs" id="cal-tabs"></div>
+        <div class="cal-grid cal-weekdays">
+          <span class="cal-head sun">日</span>
+          <span class="cal-head">月</span>
+          <span class="cal-head">火</span>
+          <span class="cal-head">水</span>
+          <span class="cal-head">木</span>
+          <span class="cal-head">金</span>
+          <span class="cal-head sat">土</span>
         </div>
-        <div class="heatmap-foot">
-          <span class="heatmap-today" id="heatmap-today"></span>
-          <span class="heatmap-legend">
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-foot">
+          <span id="cal-today-note"></span>
+          <span class="cal-legend">
             <span>少</span>
-            <span class="heatmap-cell l0"></span>
-            <span class="heatmap-cell l1"></span>
-            <span class="heatmap-cell l2"></span>
-            <span class="heatmap-cell l3"></span>
-            <span class="heatmap-cell l4"></span>
+            <i class="cal-dot l0"></i>
+            <i class="cal-dot l1"></i>
+            <i class="cal-dot l2"></i>
+            <i class="cal-dot l3"></i>
+            <i class="cal-dot l4"></i>
             <span>多</span>
           </span>
         </div>
