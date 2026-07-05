@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f1f5f9" media="(prefers-color-scheme: light)">
   <title>リベロクイズ — 1日5問のビジネス教養</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f172a%22/><text x=%2250%22 y=%2270%22 font-size=%2258%22 text-anchor=%22middle%22 fill=%22%23f8fafc%22 font-family=%22sans-serif%22 font-weight=%22bold%22>L</text></svg>">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -24,34 +26,34 @@
         </div>
       </header>
 
-      <div class="home-hero">
-        <p class="app-subtitle">1日5問、ビジネスパーソンのための教養トレーニング</p>
+      <div class="card today-card">
+        <div class="today-label">今日の5問</div>
+        <p class="today-desc" id="today-desc"></p>
+        <button class="btn btn-primary btn-big" id="btn-start">始める</button>
       </div>
 
-      <div class="card missions-card">
-        <h2 class="card-title">本日の目標</h2>
-        <div id="mission-list"></div>
+      <div class="card missions-card" id="missions-card">
+        <button class="missions-summary" id="missions-toggle" aria-expanded="false" aria-controls="mission-list">
+          <span class="card-title">本日の目標</span>
+          <span class="missions-dots" id="missions-dots" aria-hidden="true"></span>
+          <span class="missions-count" id="missions-count"></span>
+          <span class="missions-chev" aria-hidden="true">▾</span>
+        </button>
+        <div id="mission-list" class="hidden"></div>
       </div>
 
-      <button class="btn btn-primary btn-big" id="btn-start">学習を始める</button>
-
-      <div class="card review-card">
+      <div class="card review-card hidden" id="home-review-card">
         <h2 class="card-title">復習</h2>
         <p class="review-desc" id="review-desc"></p>
         <button class="btn btn-secondary btn-review" id="btn-review">復習する</button>
       </div>
-
-      <div class="card stats-card">
-        <h2 class="card-title">学習記録</h2>
-        <div class="stats-grid" id="home-stats"></div>
-      </div>
     </section>
 
-    <!-- 分野一覧画面 -->
+    <!-- 学習(分野一覧)画面 -->
     <section id="screen-map" class="screen">
       <header class="screen-header">
-        <h1>分野一覧</h1>
-        <p>学習する分野を選択してください</p>
+        <h1>学習</h1>
+        <p>分野を選ぶか、「続きから」ですぐに始められます</p>
       </header>
       <div id="category-list" class="category-list"></div>
     </section>
@@ -59,7 +61,7 @@
     <!-- ステージ選択画面 -->
     <section id="screen-stages" class="screen">
       <header class="screen-header with-back">
-        <button class="btn-back" id="btn-stages-back">←</button>
+        <button class="btn-back" id="btn-stages-back" aria-label="分野一覧に戻る">←</button>
         <h1 id="stages-title">ステージ</h1>
       </header>
       <div id="stage-list" class="stage-list"></div>
@@ -68,8 +70,9 @@
     <!-- クイズ画面 -->
     <section id="screen-quiz" class="screen">
       <header class="quiz-header">
-        <button class="btn-back" id="btn-quiz-quit">✕</button>
+        <button class="btn-back" id="btn-quiz-quit" aria-label="クイズを中断">✕</button>
         <div class="quiz-progress"><div class="quiz-progress-fill" id="quiz-progress-fill"></div></div>
+        <span class="quiz-progress-text" id="quiz-progress-text"></span>
         <div class="combo-badge hidden" id="combo-badge"><span id="combo-count">0</span>問連続正解</div>
       </header>
       <div class="quiz-body">
@@ -78,11 +81,6 @@
           <p id="question-text"></p>
         </div>
         <div class="choices" id="choices"></div>
-        <div class="explanation hidden" id="explanation">
-          <div class="explanation-verdict" id="explanation-verdict"></div>
-          <p id="explanation-text"></p>
-          <button class="btn btn-primary" id="btn-next">次へ</button>
-        </div>
       </div>
     </section>
 
@@ -97,6 +95,11 @@
           <div class="xp-bar"><div class="xp-fill" id="result-xp-fill"></div></div>
           <div class="xp-text" id="result-xp-text"></div>
         </div>
+        <div class="card result-recap hidden" id="result-recap">
+          <h2 class="card-title">ふりかえり</h2>
+          <div id="recap-list"></div>
+          <p class="recap-note" id="recap-note"></p>
+        </div>
         <div class="result-buttons">
           <button class="btn btn-secondary" id="btn-retry">再挑戦</button>
           <button class="btn btn-primary" id="btn-continue">次へ</button>
@@ -104,70 +107,113 @@
       </div>
     </section>
 
-    <!-- 記録画面 -->
+    <!-- 復習画面 -->
+    <section id="screen-review" class="screen">
+      <header class="screen-header">
+        <h1>復習</h1>
+        <p id="review-sub"></p>
+      </header>
+      <div class="card">
+        <p class="review-desc" id="review-screen-desc"></p>
+        <button class="btn btn-primary btn-big btn-review-start" id="btn-review-start">復習する</button>
+      </div>
+      <div class="card hidden" id="review-cats-card">
+        <h2 class="card-title">分野別の内訳</h2>
+        <div id="review-cats"></div>
+      </div>
+      <div class="card hidden" id="review-list-card">
+        <h2 class="card-title">間違えた回数が多い問題</h2>
+        <div id="review-list"></div>
+      </div>
+    </section>
+
+    <!-- 記録画面(学習記録+実績) -->
     <section id="screen-stats" class="screen">
       <header class="screen-header">
         <h1>記録</h1>
         <p>これまでの学習のあゆみ</p>
       </header>
-      <div class="card">
-        <h2 class="card-title">サマリー</h2>
-        <div class="stats-grid" id="stats-summary"></div>
-      </div>
-      <div class="card">
-        <h2 class="card-title">学習カレンダー</h2>
-        <div class="cal-tabs" id="cal-tabs"></div>
-        <div class="cal-grid cal-weekdays">
-          <span class="cal-head sun">日</span>
-          <span class="cal-head">月</span>
-          <span class="cal-head">火</span>
-          <span class="cal-head">水</span>
-          <span class="cal-head">木</span>
-          <span class="cal-head">金</span>
-          <span class="cal-head sat">土</span>
-        </div>
-        <div class="cal-grid" id="cal-grid"></div>
-        <div class="cal-foot">
-          <span id="cal-today-note"></span>
-          <span class="cal-legend">
-            <span>少</span>
-            <i class="cal-dot l0"></i>
-            <i class="cal-dot l1"></i>
-            <i class="cal-dot l2"></i>
-            <i class="cal-dot l3"></i>
-            <i class="cal-dot l4"></i>
-            <span>多</span>
-          </span>
-        </div>
-      </div>
-      <div class="card">
-        <h2 class="card-title">分野別正答率</h2>
-        <div id="stats-cats"></div>
-      </div>
-    </section>
 
-    <!-- 実績画面 -->
-    <section id="screen-badges" class="screen">
-      <header class="screen-header">
-        <h1>実績</h1>
-        <p id="badges-count"></p>
-      </header>
-      <div id="badge-list" class="badge-list"></div>
+      <div class="segment" role="tablist" aria-label="記録の切り替え">
+        <button class="segment-btn active" data-panel="panel-stats" role="tab" aria-selected="true">学習記録</button>
+        <button class="segment-btn" data-panel="panel-badges" role="tab" aria-selected="false">実績</button>
+      </div>
+
+      <div id="panel-stats">
+        <div class="card">
+          <h2 class="card-title">サマリー</h2>
+          <div class="stats-grid" id="stats-summary"></div>
+        </div>
+        <div class="card">
+          <h2 class="card-title">学習カレンダー</h2>
+          <div class="cal-tabs" id="cal-tabs"></div>
+          <div class="cal-grid cal-weekdays">
+            <span class="cal-head sun">日</span>
+            <span class="cal-head">月</span>
+            <span class="cal-head">火</span>
+            <span class="cal-head">水</span>
+            <span class="cal-head">木</span>
+            <span class="cal-head">金</span>
+            <span class="cal-head sat">土</span>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
+          <div class="cal-foot">
+            <span id="cal-today-note"></span>
+            <span class="cal-legend">
+              <span>少</span>
+              <i class="cal-dot l0"></i>
+              <i class="cal-dot l1"></i>
+              <i class="cal-dot l2"></i>
+              <i class="cal-dot l3"></i>
+              <i class="cal-dot l4"></i>
+              <span>多</span>
+            </span>
+          </div>
+        </div>
+        <div class="card">
+          <h2 class="card-title">分野別正答率</h2>
+          <div id="stats-cats"></div>
+        </div>
+      </div>
+
+      <div id="panel-badges" class="hidden">
+        <p class="badges-count" id="badges-count"></p>
+        <div id="badge-list" class="badge-list"></div>
+      </div>
     </section>
 
     <!-- 下部ナビゲーション -->
     <nav class="bottom-nav" id="bottom-nav">
       <button class="nav-item active" data-screen="screen-home">ホーム</button>
       <button class="nav-item" data-screen="screen-map">学習</button>
+      <button class="nav-item" data-screen="screen-review">復習<span class="nav-badge hidden" id="nav-review-badge"></span></button>
       <button class="nav-item" data-screen="screen-stats">記録</button>
-      <button class="nav-item" data-screen="screen-badges">実績</button>
     </nav>
 
+    <!-- 解説ボトムシート -->
+    <div class="explanation-sheet" id="explanation" role="region" aria-label="解説">
+      <div class="explanation-verdict" id="explanation-verdict"></div>
+      <p id="explanation-text"></p>
+      <button class="btn btn-primary" id="btn-next">次へ</button>
+    </div>
+
     <!-- トースト通知 -->
-    <div id="toast-container"></div>
+    <div id="toast-container" aria-live="polite"></div>
+
+    <!-- クイズ中断確認 -->
+    <div id="quit-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="quit-title">
+      <div class="modal-box">
+        <h2 id="quit-title">クイズを中断しますか?</h2>
+        <p>進行中の記録は保存されません。</p>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" id="btn-quit-cancel">続ける</button>
+          <button class="btn btn-danger" id="btn-quit-confirm">中断する</button>
+        </div>
+      </div>
+    </div>
 
     <!-- レベルアップ表示 -->
-    <div id="levelup-overlay" class="hidden">
+    <div id="levelup-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-label="レベルアップ">
       <div class="levelup-box">
         <div class="levelup-label">LEVEL UP</div>
         <div class="levelup-level" id="levelup-level">Lv.2</div>
