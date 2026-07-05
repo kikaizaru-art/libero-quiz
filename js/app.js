@@ -12,6 +12,7 @@
   const PASS_LINE = 3;          // 5問中3問正解でクリア
   const REVIEW_SIZE = 5;        // 復習1回あたりの出題数
   const REVIEW_PERFECT_BONUS = 15;
+  const FREE_SIZE = 5;          // ランダム出題(全ステージ制覇後)の出題数
 
   const MISSIONS = [
     { id: "clear",   name: "ステージを1回クリアする", goal: 1,  reward: 30, key: "clears" },
@@ -49,6 +50,7 @@
       wrong: {},                                   // "catId:stageIdx:qIdx" -> { count, last }
       catStats: {},                                // catId -> { answered, correct }
       activity: {},                                // "YYYY-MM-DD" -> その日の解答数
+      lastStage: null,                             // { catId, stageIdx } 最後に挑戦したステージ
     };
   }
 
@@ -190,6 +192,46 @@
     if (allMastered) awardBadge("complete");
   }
 
+  // ---------- ステージ進捗ヘルパー ----------
+
+  function stageRecord(catId, i) {
+    return state.stages[`${catId}-${i}`] || { stars: 0, best: 0 };
+  }
+
+  function isUnlocked(cat, i) {
+    return i === 0 || stageRecord(cat.id, i - 1).stars >= 1;
+  }
+
+  // 分野内で次に挑戦すべきステージ(未クリアかつ解放済み)。なければ -1
+  function nextStageIn(cat) {
+    return cat.stages.findIndex((_, i) => stageRecord(cat.id, i).stars === 0 && isUnlocked(cat, i));
+  }
+
+  // 「今日の5問」の出題先を決める
+  // 1. 前回挑戦したステージが未クリアならその続き
+  // 2. 同分野の次の未クリアステージ
+  // 3. 全分野を順に見て最初の未クリアステージ
+  // 4. すべてクリア済み → 復習待ちがあれば復習、なければランダム5問
+  function pickTodayTarget() {
+    if (state.lastStage) {
+      const cat = QUIZ_DATA.find(c => c.id === state.lastStage.catId);
+      if (cat) {
+        const i = state.lastStage.stageIdx;
+        if (i < cat.stages.length && stageRecord(cat.id, i).stars === 0 && isUnlocked(cat, i)) {
+          return { type: "stage", catId: cat.id, stageIdx: i, resumed: true };
+        }
+        const next = nextStageIn(cat);
+        if (next >= 0) return { type: "stage", catId: cat.id, stageIdx: next, resumed: false };
+      }
+    }
+    for (const cat of QUIZ_DATA) {
+      const i = nextStageIn(cat);
+      if (i >= 0) return { type: "stage", catId: cat.id, stageIdx: i, resumed: false };
+    }
+    if (Object.keys(state.wrong).length > 0) return { type: "review" };
+    return { type: "free" };
+  }
+
   // ---------- 画面遷移 ----------
 
   const screens = document.querySelectorAll(".screen");
@@ -198,7 +240,7 @@
   function show(screenId) {
     screens.forEach(s => s.classList.toggle("active", s.id === screenId));
     navItems.forEach(n => n.classList.toggle("active", n.dataset.screen === screenId));
-    const navScreens = ["screen-home", "screen-map", "screen-stats", "screen-badges", "screen-stages"];
+    const navScreens = ["screen-home", "screen-map", "screen-stages", "screen-review", "screen-stats"];
     document.getElementById("bottom-nav").style.display =
       navScreens.includes(screenId) ? "flex" : "none";
     window.scrollTo(0, 0);
@@ -211,6 +253,25 @@
 
   // ---------- ホーム描画 ----------
 
+  function renderToday() {
+    const t = pickTodayTarget();
+    const desc = document.getElementById("today-desc");
+    const btn = document.getElementById("btn-start");
+    if (t.type === "stage") {
+      const cat = QUIZ_DATA.find(c => c.id === t.catId);
+      const stage = cat.stages[t.stageIdx];
+      desc.textContent = `${cat.name} ステージ${t.stageIdx + 1}(${stage.name})${t.resumed ? "の続きから" : "に挑戦"}`;
+      btn.textContent = "始める";
+    } else if (t.type === "review") {
+      const n = Math.min(Object.keys(state.wrong).length, REVIEW_SIZE);
+      desc.textContent = `未クリアのステージはありません。復習${n}問で弱点を克服しましょう`;
+      btn.textContent = "復習を始める";
+    } else {
+      desc.textContent = "全ステージクリア済み。全分野からランダムに5問出題します";
+      btn.textContent = "始める";
+    }
+  }
+
   function renderHome() {
     ensureDaily();
     const info = levelInfo(state.xp);
@@ -218,6 +279,15 @@
     document.getElementById("home-streak").textContent = `連続 ${state.streak.count}日`;
     document.getElementById("home-xp-fill").style.width = `${(info.current / info.needed) * 100}%`;
     document.getElementById("home-xp-text").textContent = `${info.current} / ${info.needed} XP`;
+
+    renderToday();
+
+    // 本日の目標(1行サマリー+展開)
+    const doneCount = MISSIONS.filter(m => state.daily.claimed.includes(m.id)).length;
+    document.getElementById("missions-dots").innerHTML = MISSIONS.map(m =>
+      `<i class="${state.daily.claimed.includes(m.id) ? "done" : ""}"></i>`
+    ).join("");
+    document.getElementById("missions-count").textContent = `${doneCount}/${MISSIONS.length} 達成`;
 
     const missionList = document.getElementById("mission-list");
     missionList.innerHTML = "";
@@ -235,53 +305,54 @@
       missionList.appendChild(el);
     }
 
-    const totalStages = QUIZ_DATA.reduce((a, c) => a + c.stages.length, 0);
-    const clearedStages = Object.values(state.stages).filter(s => s.stars >= 1).length;
-    const totalStars = Object.values(state.stages).reduce((a, s) => a + (s.stars || 0), 0);
-    const stats = [
-      { value: `${clearedStages}/${totalStages}`, label: "クリア" },
-      { value: `${totalStars}/${totalStages * 3}`, label: "獲得スター" },
-      { value: `${state.badges.length}/${BADGES.length}`, label: "実績" },
-      { value: state.totals.correct, label: "累計正解" },
-      { value: state.totals.maxCombo, label: "最大連続正解" },
-      { value: state.totals.perfects, label: "全問正解" },
-    ];
-    document.getElementById("home-stats").innerHTML = stats.map(s =>
-      `<div class="stat"><div class="stat-value">${s.value}</div><div class="stat-label">${s.label}</div></div>`
-    ).join("");
-
-    // 復習カード
+    // 復習カード(待ちがあるときだけ表示)
     const reviewCount = Object.keys(state.wrong).length;
-    const btnReview = document.getElementById("btn-review");
-    const desc = document.getElementById("review-desc");
+    const card = document.getElementById("home-review-card");
+    card.classList.toggle("hidden", reviewCount === 0);
     if (reviewCount > 0) {
-      desc.textContent = `間違えた問題が ${reviewCount}問 あります。正解すればリストから消えます。`;
-      btnReview.textContent = `復習する(${Math.min(reviewCount, REVIEW_SIZE)}問)`;
-      btnReview.disabled = false;
-    } else {
-      desc.textContent = "復習する問題はありません。間違えた問題がここに溜まります。";
-      btnReview.textContent = "復習する";
-      btnReview.disabled = true;
+      document.getElementById("review-desc").textContent =
+        `間違えた問題が ${reviewCount}問 あります。正解すればリストから消えます。`;
+      document.getElementById("btn-review").textContent =
+        `復習する(${Math.min(reviewCount, REVIEW_SIZE)}問)`;
     }
   }
 
-  // ---------- 分野マップ描画 ----------
+  // 本日の目標の展開/折りたたみ
+  document.getElementById("missions-toggle").addEventListener("click", () => {
+    const card = document.getElementById("missions-card");
+    const open = card.classList.toggle("open");
+    document.getElementById("mission-list").classList.toggle("hidden", !open);
+    document.getElementById("missions-toggle").setAttribute("aria-expanded", String(open));
+  });
+
+  // ---------- 学習(分野一覧)描画 ----------
 
   function renderMap() {
     const list = document.getElementById("category-list");
     list.innerHTML = "";
     for (const cat of QUIZ_DATA) {
-      const cleared = cat.stages.filter((_, i) => (state.stages[`${cat.id}-${i}`] || {}).stars >= 1).length;
-      const stars = cat.stages.reduce((a, _, i) => a + ((state.stages[`${cat.id}-${i}`] || {}).stars || 0), 0);
-      const btn = document.createElement("button");
-      btn.className = "category-card";
-      btn.style.setProperty("--cat-color", cat.color);
-      btn.innerHTML = `
-        <div class="category-name">${cat.name}</div>
-        <div class="category-progress">${cleared}/${cat.stages.length} ステージ</div>
-        <div class="category-stars">★ ${stars}/${cat.stages.length * 3}</div>`;
-      btn.addEventListener("click", () => openStages(cat.id));
-      list.appendChild(btn);
+      const cleared = cat.stages.filter((_, i) => stageRecord(cat.id, i).stars >= 1).length;
+      const stars = cat.stages.reduce((a, _, i) => a + stageRecord(cat.id, i).stars, 0);
+      const maxStars = cat.stages.length * 3;
+      const nextIdx = nextStageIn(cat);
+      const el = document.createElement("div");
+      el.className = "category-card";
+      el.style.setProperty("--cat-color", cat.color);
+      el.style.setProperty("--ring-pct", `${(stars / maxStars) * 100}%`);
+      el.innerHTML = `
+        <button class="category-open">
+          <span class="category-ring"><span class="category-ring-inner">★${stars}</span></span>
+          <span class="category-info">
+            <span class="category-name">${cat.name}</span>
+            <span class="category-progress">${cleared}/${cat.stages.length} ステージ ・ ★${stars}/${maxStars}</span>
+          </span>
+          <span class="category-chev" aria-hidden="true">›</span>
+        </button>
+        ${nextIdx >= 0 ? `<button class="category-continue">${cleared > 0 ? "続きから" : "始める"}</button>` : ""}`;
+      el.querySelector(".category-open").addEventListener("click", () => openStages(cat.id));
+      const cont = el.querySelector(".category-continue");
+      if (cont) cont.addEventListener("click", () => startQuiz(cat.id, nextIdx));
+      list.appendChild(el);
     }
   }
 
@@ -301,8 +372,8 @@
     const list = document.getElementById("stage-list");
     list.innerHTML = "";
     cat.stages.forEach((stage, i) => {
-      const record = state.stages[`${cat.id}-${i}`] || { stars: 0, best: 0 };
-      const unlocked = i === 0 || (state.stages[`${cat.id}-${i - 1}`] || {}).stars >= 1;
+      const record = stageRecord(cat.id, i);
+      const unlocked = isUnlocked(cat, i);
       const btn = document.createElement("button");
       btn.className = `stage-card${unlocked ? "" : " locked"}`;
       btn.style.setProperty("--cat-color", cat.color);
@@ -321,9 +392,9 @@
 
   // ---------- クイズ本体 ----------
 
-  // mode: "stage"(通常) | "review"(復習)
+  // mode: "stage"(通常) | "review"(復習) | "free"(ランダム出題)
   // items: [{ catId, stageIdx, qIdx }]
-  let quiz = null; // { mode, catId, stageIdx, items, index, correct, combo, maxCombo, xp, mastered }
+  let quiz = null; // { mode, catId, stageIdx, items, index, correct, combo, maxCombo, xp, mastered, wrongList }
 
   function shuffle(arr) {
     const a = arr.slice();
@@ -334,13 +405,21 @@
     return a;
   }
 
+  function newQuiz(mode, catId, stageIdx, items) {
+    return {
+      mode, catId, stageIdx, items,
+      index: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, mastered: 0,
+      wrongList: [],
+    };
+  }
+
   function startQuiz(catId, stageIdx) {
     const cat = QUIZ_DATA.find(c => c.id === catId);
     const items = shuffle(cat.stages[stageIdx].questions.map((_, i) => ({ catId, stageIdx, qIdx: i })));
-    quiz = {
-      mode: "stage", catId, stageIdx, items,
-      index: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, mastered: 0,
-    };
+    quiz = newQuiz("stage", catId, stageIdx, items);
+    currentCatId = catId; // 中断時にステージ一覧へ戻れるように
+    state.lastStage = { catId, stageIdx };
+    saveState();
     show("screen-quiz");
     renderQuestion();
   }
@@ -352,12 +431,27 @@
       const [catId, stageIdx, qIdx] = k.split(":");
       return { catId, stageIdx: Number(stageIdx), qIdx: Number(qIdx) };
     });
-    quiz = {
-      mode: "review", catId: null, stageIdx: null, items,
-      index: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, mastered: 0,
-    };
+    quiz = newQuiz("review", null, null, items);
     show("screen-quiz");
     renderQuestion();
+  }
+
+  function startFree() {
+    const all = [];
+    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+      stage.questions.forEach((_, qi) => all.push({ catId: cat.id, stageIdx: si, qIdx: qi }))
+    ));
+    quiz = newQuiz("free", null, null, shuffle(all).slice(0, FREE_SIZE));
+    show("screen-quiz");
+    renderQuestion();
+  }
+
+  // 「今日の5問」開始
+  function startToday() {
+    const t = pickTodayTarget();
+    if (t.type === "stage") startQuiz(t.catId, t.stageIdx);
+    else if (t.type === "review") startReview();
+    else startFree();
   }
 
   function questionAt(item) {
@@ -369,16 +463,26 @@
     return questionAt(quiz.items[quiz.index]);
   }
 
+  // 解説ボトムシート
+  const sheet = document.getElementById("explanation");
+  function openSheet() { sheet.classList.add("open"); }
+  function closeSheet() { sheet.classList.remove("open"); }
+
   function renderQuestion() {
     const item = quiz.items[quiz.index];
     const cat = QUIZ_DATA.find(c => c.id === item.catId);
     const q = currentQuestion();
     const total = quiz.items.length;
 
+    closeSheet();
+
     document.getElementById("quiz-progress-fill").style.width = `${(quiz.index / total) * 100}%`;
-    document.getElementById("quiz-meta").textContent = quiz.mode === "review"
-      ? `復習(${cat.name}) ・ 第${quiz.index + 1}問 / 全${total}問`
-      : `${cat.name} ${cat.stages[item.stageIdx].name} ・ 第${quiz.index + 1}問 / 全${total}問`;
+    document.getElementById("quiz-progress-text").textContent = `${quiz.index + 1}/${total}`;
+    const metaPrefix = quiz.mode === "review" ? `復習(${cat.name})`
+      : quiz.mode === "free" ? `ランダム出題(${cat.name})`
+      : `${cat.name} ${cat.stages[item.stageIdx].name}`;
+    document.getElementById("quiz-meta").textContent =
+      `${metaPrefix} ・ 第${quiz.index + 1}問 / 全${total}問`;
     document.getElementById("question-text").textContent = q.q;
 
     const comboBadge = document.getElementById("combo-badge");
@@ -389,8 +493,6 @@
       comboBadge.classList.add("hidden");
     }
 
-    document.getElementById("explanation").classList.add("hidden");
-
     const choicesEl = document.getElementById("choices");
     choicesEl.innerHTML = "";
     // 選択肢の並びも毎回シャッフル
@@ -398,6 +500,7 @@
     order.forEach(choiceIdx => {
       const btn = document.createElement("button");
       btn.className = "choice";
+      btn.dataset.index = choiceIdx;
       btn.textContent = q.choices[choiceIdx];
       btn.addEventListener("click", () => answer(choiceIdx, btn));
       choicesEl.appendChild(btn);
@@ -412,7 +515,7 @@
     const buttons = document.querySelectorAll("#choices .choice");
     buttons.forEach(b => {
       b.disabled = true;
-      if (b.textContent === q.choices[q.answer]) b.classList.add("correct");
+      if (Number(b.dataset.index) === q.answer) b.classList.add("correct");
       else if (b !== clickedBtn) b.classList.add("dim");
     });
 
@@ -439,6 +542,7 @@
       entry.count++;
       entry.last = today;
       state.wrong[wrongKey] = entry;
+      quiz.wrongList.push({ q: q.q, correct: q.choices[q.answer] });
     }
 
     if (isCorrect) {
@@ -466,7 +570,7 @@
     document.getElementById("explanation-text").textContent = q.exp;
     document.getElementById("btn-next").textContent =
       quiz.index + 1 < quiz.items.length ? "次へ" : "結果を見る";
-    document.getElementById("explanation").classList.remove("hidden");
+    openSheet();
 
     document.getElementById("quiz-progress-fill").style.width =
       `${((quiz.index + 1) / quiz.items.length) * 100}%`;
@@ -497,7 +601,26 @@
       `Lv.${info.level} ・ 次のレベルまで あと${info.needed - info.current}XP`;
   }
 
-  function finishReview() {
+  // 間違えた問題のふりかえり
+  function renderRecap() {
+    const card = document.getElementById("result-recap");
+    if (quiz.wrongList.length === 0) {
+      card.classList.add("hidden");
+      return;
+    }
+    card.classList.remove("hidden");
+    document.getElementById("recap-list").innerHTML = quiz.wrongList.map(w => `
+      <div class="recap-item">
+        <div class="recap-q">${w.q}</div>
+        <div class="recap-a">正解:${w.correct}</div>
+      </div>`).join("");
+    document.getElementById("recap-note").textContent = quiz.mode === "review"
+      ? "この問題は復習リストに残っています。復習タブからいつでも再挑戦できます。"
+      : "間違えた問題は復習リストに追加しました。復習タブからいつでも挑戦できます。";
+  }
+
+  // 復習・ランダム出題のリザルト(ステージ記録なし)
+  function finishLight(mode) {
     const total = quiz.items.length;
     let earnedXp = quiz.xp;
     if (quiz.correct === total) earnedXp += REVIEW_PERFECT_BONUS;
@@ -508,18 +631,26 @@
     checkCollectionBadges();
     saveState();
 
-    document.getElementById("result-title").textContent = "復習完了";
+    document.getElementById("result-title").textContent =
+      mode === "review" ? "復習完了" : "5問チャレンジ完了";
     document.getElementById("result-stars").classList.add("hidden");
     document.getElementById("result-score").textContent =
       `${total}問中 ${quiz.correct}問正解` +
-      (quiz.mastered > 0 ? ` ・ ${quiz.mastered}問を克服` : "");
+      (mode === "review" && quiz.mastered > 0 ? ` ・ ${quiz.mastered}問を克服` : "");
     renderResultXp(earnedXp);
+    renderRecap();
 
-    const remaining = Object.keys(state.wrong).length;
     const btnRetry = document.getElementById("btn-retry");
-    btnRetry.classList.toggle("hidden", remaining === 0);
-    btnRetry.textContent = "続けて復習";
-    btnRetry.onclick = () => startReview();
+    if (mode === "review") {
+      const remaining = Object.keys(state.wrong).length;
+      btnRetry.classList.toggle("hidden", remaining === 0);
+      btnRetry.textContent = "続けて復習";
+      btnRetry.onclick = () => startReview();
+    } else {
+      btnRetry.classList.remove("hidden");
+      btnRetry.textContent = "もう5問";
+      btnRetry.onclick = () => startFree();
+    }
     const btnContinue = document.getElementById("btn-continue");
     btnContinue.textContent = "ホームへ";
     btnContinue.onclick = () => { show("screen-home"); render(); };
@@ -528,7 +659,8 @@
   }
 
   function finishQuiz() {
-    if (quiz.mode === "review") { finishReview(); return; }
+    closeSheet();
+    if (quiz.mode !== "stage") { finishLight(quiz.mode); return; }
 
     const total = quiz.items.length;
     const stars = starsFor(quiz.correct, total);
@@ -569,6 +701,7 @@
       `${total}問中 ${quiz.correct}問正解 ・ 最大${quiz.maxCombo}問連続正解` +
       (cleared ? "" : ` (${PASS_LINE}問正解でクリア)`);
     renderResultXp(earnedXp);
+    renderRecap();
 
     const btnRetry = document.getElementById("btn-retry");
     btnRetry.classList.remove("hidden");
@@ -583,10 +716,74 @@
     btnContinue.textContent = hasNext ? "次のステージへ" : "分野一覧へ";
     btnContinue.onclick = () => {
       if (hasNext) startQuiz(quiz.catId, nextIdx);
-      else { renderStages(); show("screen-stages"); render(); }
+      else { renderMap(); show("screen-map"); render(); }
     };
 
     show("screen-result");
+  }
+
+  // ---------- 復習画面 ----------
+
+  function renderReview() {
+    const keys = Object.keys(state.wrong);
+    const n = keys.length;
+
+    document.getElementById("review-sub").textContent =
+      n > 0 ? `復習待ちが ${n}問 あります` : "復習待ちはありません";
+
+    const desc = document.getElementById("review-screen-desc");
+    const btn = document.getElementById("btn-review-start");
+    if (n > 0) {
+      desc.textContent = "間違えた問題から最大5問を出題します。正解するとリストから消えます(克服)。";
+      btn.textContent = `復習する(${Math.min(n, REVIEW_SIZE)}問)`;
+      btn.disabled = false;
+    } else {
+      desc.textContent = "間違えた問題がここに溜まります。今は復習する問題がありません。";
+      btn.textContent = "復習する";
+      btn.disabled = true;
+    }
+
+    // 分野別の内訳
+    const catsCard = document.getElementById("review-cats-card");
+    catsCard.classList.toggle("hidden", n === 0);
+    if (n > 0) {
+      const counts = {};
+      keys.forEach(k => {
+        const catId = k.split(":")[0];
+        counts[catId] = (counts[catId] || 0) + 1;
+      });
+      document.getElementById("review-cats").innerHTML = QUIZ_DATA
+        .filter(c => counts[c.id])
+        .map(c => `
+          <div class="review-cat">
+            <span class="review-cat-name">${c.name}</span>
+            <span class="review-cat-count">${counts[c.id]}問</span>
+          </div>`).join("");
+    }
+
+    // 間違えた回数が多い問題(正解はネタバレしない)
+    const listCard = document.getElementById("review-list-card");
+    listCard.classList.toggle("hidden", n === 0);
+    if (n > 0) {
+      const entries = keys.map(k => {
+        const [catId, si, qi] = k.split(":");
+        const cat = QUIZ_DATA.find(c => c.id === catId);
+        const q = cat.stages[Number(si)].questions[Number(qi)];
+        return { catName: cat.name, text: q.q, count: state.wrong[k].count };
+      }).sort((a, b) => b.count - a.count).slice(0, 8);
+      document.getElementById("review-list").innerHTML = entries.map(e => `
+        <div class="review-item">
+          <div class="review-item-q">${e.text.length > 42 ? e.text.slice(0, 42) + "…" : e.text}</div>
+          <div class="review-item-meta">${e.catName} ・ ${e.count}回 間違えました</div>
+        </div>`).join("");
+    }
+  }
+
+  function updateNavBadge() {
+    const n = Object.keys(state.wrong).length;
+    const badge = document.getElementById("nav-review-badge");
+    badge.textContent = n;
+    badge.classList.toggle("hidden", n === 0);
   }
 
   // ---------- バッジ描画 ----------
@@ -609,6 +806,19 @@
   }
 
   // ---------- 記録画面 ----------
+
+  // セグメント切替(学習記録 / 実績)
+  document.querySelectorAll(".segment-btn").forEach(btn =>
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".segment-btn").forEach(b => {
+        const active = b === btn;
+        b.classList.toggle("active", active);
+        b.setAttribute("aria-selected", String(active));
+      });
+      document.getElementById("panel-stats").classList.toggle("hidden", btn.dataset.panel !== "panel-stats");
+      document.getElementById("panel-badges").classList.toggle("hidden", btn.dataset.panel !== "panel-badges");
+    })
+  );
 
   function renderStats() {
     // サマリー
@@ -711,26 +921,34 @@
 
   // ---------- 共通イベント ----------
 
-  document.getElementById("btn-start").addEventListener("click", () => {
-    renderMap();
-    show("screen-map");
-  });
+  document.getElementById("btn-start").addEventListener("click", () => startToday());
+  document.getElementById("btn-review").addEventListener("click", () => startReview());
+  document.getElementById("btn-review-start").addEventListener("click", () => startReview());
   document.getElementById("btn-stages-back").addEventListener("click", () => {
     renderMap();
     show("screen-map");
   });
+
+  // クイズ中断(アプリ内モーダル)
+  const quitOverlay = document.getElementById("quit-overlay");
   document.getElementById("btn-quiz-quit").addEventListener("click", () => {
-    if (confirm("クイズを中断しますか?(進行中の記録は保存されません)")) {
-      if (quiz && quiz.mode === "review") {
-        show("screen-home");
-        render();
-      } else {
-        renderStages();
-        show("screen-stages");
-      }
+    quitOverlay.classList.remove("hidden");
+  });
+  document.getElementById("btn-quit-cancel").addEventListener("click", () => {
+    quitOverlay.classList.add("hidden");
+  });
+  document.getElementById("btn-quit-confirm").addEventListener("click", () => {
+    quitOverlay.classList.add("hidden");
+    closeSheet();
+    if (quiz && quiz.mode !== "stage") {
+      show("screen-home");
+      render();
+    } else {
+      renderStages();
+      show("screen-stages");
     }
   });
-  document.getElementById("btn-review").addEventListener("click", () => startReview());
+
   document.getElementById("btn-levelup-close").addEventListener("click", () => {
     document.getElementById("levelup-overlay").classList.add("hidden");
   });
@@ -738,8 +956,10 @@
   function render() {
     renderHome();
     renderMap();
+    renderReview();
     renderStats();
     renderBadges();
+    updateNavBadge();
   }
 
   // ---------- 起動 ----------
@@ -747,4 +967,9 @@
   ensureDaily();
   render();
   show("screen-home");
+
+  // PWA: Service Worker登録(http(s)配信時のみ)
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    navigator.serviceWorker.register("sw.js").catch(() => { /* 登録失敗時は通常動作 */ });
+  }
 })();
