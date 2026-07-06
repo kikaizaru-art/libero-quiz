@@ -1335,6 +1335,18 @@
 
   let libSelected = QUIZ_DATA[0].id; // 表示中の分野タブ
   let libScene = "all";              // 表示中の場面フィルタ
+  const libOpen = {};                // catId → 展開中ステージ番号のSet(セッション内のみ保持)
+
+  // 分野の初期展開ステージ:カードが増える余地のある最初のステージ(全解放なら初級)
+  function libOpenFor(cat) {
+    if (!libOpen[cat.id]) {
+      let idx = cat.stages.findIndex((stage, si) =>
+        stage.questions.some((_, qi) => !state.seen[`${cat.id}:${si}:${qi}`]));
+      if (idx < 0) idx = 0;
+      libOpen[cat.id] = new Set([idx]);
+    }
+    return libOpen[cat.id];
+  }
 
   // 分野内の各問題の解放状況を集計する
   function libRowsFor(cat) {
@@ -1374,6 +1386,18 @@
     document.getElementById("library-sub").textContent =
       `集めた知識カード ${found} / ${total}`;
 
+    // 案内文はカードが1枚もないときだけ(空状態の説明として)
+    document.getElementById("library-note").classList.toggle("hidden", found > 0);
+
+    // 場面ごとの解放済み件数(ピルに併記して空振りタップを防ぐ)
+    const sceneCounts = {};
+    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+      stage.questions.forEach((q, qi) => {
+        if (!state.seen[`${cat.id}:${si}:${qi}`]) return;
+        (q.lib.scenes || []).forEach(s => { sceneCounts[s] = (sceneCounts[s] || 0) + 1; });
+      })
+    ));
+
     // 場面フィルタピル(「明日は会食」など目的からカードを逆引きする導線)
     const scenesEl = document.getElementById("library-scenes");
     scenesEl.innerHTML = "";
@@ -1383,6 +1407,12 @@
       btn.setAttribute("role", "tab");
       btn.setAttribute("aria-selected", String(sc.id === libScene));
       btn.textContent = sc.name;
+      if (sc.id !== "all") {
+        const count = document.createElement("span");
+        count.className = "scene-pill-count";
+        count.textContent = sceneCounts[sc.id] || 0;
+        btn.appendChild(count);
+      }
       btn.addEventListener("click", () => {
         libScene = sc.id;
         renderLibrary();
@@ -1397,7 +1427,7 @@
       return;
     }
 
-    // 選択中の分野のみ表示
+    // 選択中の分野のみ表示(ステージ別アコーディオン)
     const cat = QUIZ_DATA.find(c => c.id === libSelected) || QUIZ_DATA[0];
     const rows = libRowsFor(cat);
     const list = document.getElementById("library-list");
@@ -1411,25 +1441,47 @@
         <span class="library-cat-name">${cat.name}</span>
         <span class="library-cat-count">${rows.filter(r => r.seen).length}/${rows.length}</span>
       </div>`;
-    for (const r of rows) {
-      if (r.seen) {
+
+    const open = libOpenFor(cat);
+    cat.stages.forEach((stage, si) => {
+      const seenQs = [];
+      let lockedCount = 0;
+      stage.questions.forEach((q, qi) => {
+        if (state.seen[`${cat.id}:${si}:${qi}`]) seenQs.push(q); else lockedCount++;
+      });
+
+      const isOpen = open.has(si);
+      const head = document.createElement("button");
+      head.className = "library-stage-head";
+      head.setAttribute("aria-expanded", String(isOpen));
+      head.innerHTML = `
+        <span class="library-stage-name">${stage.name}</span>
+        <span class="library-stage-count">${seenQs.length}/${stage.questions.length}</span>
+        <span class="library-stage-chev" aria-hidden="true">${isOpen ? "▾" : "›"}</span>`;
+      head.addEventListener("click", () => {
+        if (isOpen) open.delete(si); else open.add(si);
+        renderLibrary();
+      });
+      card.appendChild(head);
+      if (!isOpen) return;
+
+      for (const q of seenQs) {
         const btn = document.createElement("button");
-        btn.className = "library-item";
+        btn.className = "library-item in-stage";
         btn.innerHTML = `
-          <span class="library-item-title">${r.q.lib.title}</span>
-          <span class="library-item-sub">${r.stageName}</span>
+          <span class="library-item-title">${q.lib.title}</span>
           <span class="library-item-chev" aria-hidden="true">›</span>`;
-        btn.addEventListener("click", () => openLibEntry(cat, r.q));
+        btn.addEventListener("click", () => openLibEntry(cat, q));
         card.appendChild(btn);
-      } else {
+      }
+      // 未解放分は1行に集約(枚数はステージヘッダーの n/8 でも読める)
+      if (lockedCount > 0) {
         const div = document.createElement("div");
-        div.className = "library-item locked";
-        div.innerHTML = `
-          <span class="library-item-title">???</span>
-          <span class="library-item-sub">${r.stageName}</span>`;
+        div.className = "library-locked-row";
+        div.textContent = `未解放 ${lockedCount}枚 — クイズに正解すると集まります`;
         card.appendChild(div);
       }
-    }
+    });
     list.appendChild(card);
   }
 
