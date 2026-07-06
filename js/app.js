@@ -17,7 +17,7 @@
   const FREEZE_MAX = 2;         // ストリークフリーズの最大ストック数
   const FREEZE_EVERY = 7;       // 7日連続ごとにフリーズを1個獲得
 
-  // 腕試し:全分野から初級・中級・上級を5問ずつ、計15問を難易度順に出題して実力を評価
+  // 実力判定テスト:全分野から初級・中級・上級を5問ずつ、計15問を難易度順に出題して実力を評価
   const EXAM_SIZE_PER_STAGE = 5;              // 各難易度からの出題数
   const EXAM_MAX_PER_CAT = 3;                 // 同一分野の出題上限(偏り防止)
   const EXAM_POINTS = [1, 2, 3];              // 初級1点・中級2点・上級3点(満点30点)
@@ -59,10 +59,10 @@
     { id: "daily30",     name: "日課の木", desc: "今日の5問を30回クリア" },
     { id: "level5",      name: "レベル5到達", desc: "レベル5に到達" },
     { id: "level10",     name: "レベル10到達", desc: "レベル10に到達" },
-    { id: "exam_first",  name: "腕試し初挑戦", desc: "腕試しに初めて挑戦" },
-    { id: "exam_b",      name: "B評価到達", desc: "腕試しでB評価以上を獲得" },
-    { id: "exam_a",      name: "A評価到達", desc: "腕試しでA評価以上を獲得" },
-    { id: "exam_s",      name: "S評価獲得", desc: "腕試しでS評価を獲得" },
+    { id: "exam_first",  name: "実力判定テスト初挑戦", desc: "実力判定テストに初めて挑戦" },
+    { id: "exam_b",      name: "B評価到達", desc: "実力判定テストでB評価以上を獲得" },
+    { id: "exam_a",      name: "A評価到達", desc: "実力判定テストでA評価以上を獲得" },
+    { id: "exam_s",      name: "S評価獲得", desc: "実力判定テストでS評価を獲得" },
     ...QUIZ_DATA.map(c => ({
       id: `master_${c.id}`, name: `${c.name}マスター`,
       desc: `${c.name}の全ステージで星3を獲得`,
@@ -480,7 +480,7 @@
     document.getElementById("btn-learn").textContent = t.resumed ? "続きから" : "始める";
   }
 
-  // 腕試しカード:最高評価を常時表示して更新意欲につなげる
+  // 実力判定テストカード:最高評価を常時表示して更新意欲につなげる
   function renderExamCard() {
     const best = state.exam.best;
     const pill = document.getElementById("exam-best-pill");
@@ -617,7 +617,7 @@
 
   // ---------- クイズ本体 ----------
 
-  // mode: "stage"(通常) | "review"(復習) | "daily"(今日の5問) | "exam"(腕試し)
+  // mode: "stage"(通常) | "review"(復習) | "daily"(今日の5問) | "exam"(実力判定テスト)
   // items: [{ catId, stageIdx, qIdx }]
   let quiz = null; // { mode, catId, stageIdx, items, index, correct, combo, maxCombo, xp, mastered, wrongList, score, stageCorrect, catLost }
 
@@ -635,7 +635,7 @@
       mode, catId, stageIdx, items,
       index: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, mastered: 0,
       wrongList: [],
-      // 腕試し用:難易度加重スコアと内訳(他モードでは未使用)
+      // 実力判定テスト用:難易度加重スコアと内訳(他モードでは未使用)
       score: 0, stageCorrect: [0, 0, 0], catLost: {},
     };
   }
@@ -670,7 +670,7 @@
     renderQuestion();
   }
 
-  // ---------- 腕試し(全問ランダムの実力テスト) ----------
+  // ---------- 実力判定テスト(全問ランダムの実力テスト) ----------
 
   // 初級→中級→上級の順に各5問。各層内はランダムで、同一分野は全体で最大3問まで
   function examItems() {
@@ -742,7 +742,7 @@
     document.getElementById("quiz-progress-text").textContent = `${quiz.index + 1}/${total}`;
     const metaPrefix = quiz.mode === "review" ? `復習(${cat.name})`
       : quiz.mode === "daily" ? `今日の5問(${cat.name})`
-      : quiz.mode === "exam" ? `腕試し ${cat.stages[item.stageIdx].name}(${cat.name})`
+      : quiz.mode === "exam" ? `実力判定テスト ${cat.stages[item.stageIdx].name}(${cat.name})`
       : `${cat.name} ${cat.stages[item.stageIdx].name}`;
     document.getElementById("quiz-meta").textContent =
       `${metaPrefix} ・ 第${quiz.index + 1}問 / 全${total}問`;
@@ -792,7 +792,7 @@
     const today = todayStr();
     state.activity[today] = (state.activity[today] || 0) + 1;
 
-    // 腕試しの採点:難易度加重(初級1点・中級2点・上級3点)。失点は分野別に記録
+    // 実力判定テストの採点:難易度加重(初級1点・中級2点・上級3点)。失点は分野別に記録
     if (quiz.mode === "exam") {
       const pts = EXAM_POINTS[item.stageIdx] || 1;
       if (isCorrect) {
@@ -992,7 +992,7 @@
     show("screen-result");
   }
 
-  // 腕試しのリザルト:評価(ランク)・内訳・次の評価までの距離を表示
+  // 実力判定テストのリザルト:評価(ランク)・内訳・次の評価までの距離を表示
   function finishExam() {
     const total = quiz.items.length;
     const maxScore = examMaxScore();
@@ -1028,7 +1028,7 @@
     saveState();
 
     // 画面描画
-    document.getElementById("result-title").textContent = "腕試し 結果";
+    document.getElementById("result-title").textContent = "実力判定テスト 結果";
     document.getElementById("result-stars").classList.add("hidden");
     const rankEl = document.getElementById("result-rank");
     rankEl.classList.remove("hidden");
@@ -1370,11 +1370,11 @@
     // 分野別正答率
     renderCatRates();
 
-    // 腕試しの記録
+    // 実力判定テストの記録
     renderExamHistory();
   }
 
-  // 腕試しの挑戦履歴(直近)。未挑戦なら非表示
+  // 実力判定テストの挑戦履歴(直近)。未挑戦なら非表示
   function renderExamHistory() {
     const card = document.getElementById("exam-history-card");
     const h = state.exam.history;
