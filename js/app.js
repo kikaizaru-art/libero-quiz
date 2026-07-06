@@ -468,37 +468,53 @@
     document.getElementById("week-strip").innerHTML = html;
   }
 
-  // 「学習を進める」カード(ステージ学習の続き)
-  function renderLearnCard() {
-    const t = pickLearnTarget();
-    const card = document.getElementById("home-learn-card");
-    card.classList.toggle("hidden", !t);
-    if (!t) return;
-    const cat = QUIZ_DATA.find(c => c.id === t.catId);
-    const stage = cat.stages[t.stageIdx];
-    document.getElementById("learn-desc").textContent =
-      `${cat.name} ステージ${t.stageIdx + 1}(${stage.name})${t.resumed ? "の続きから" : "に挑戦"}`;
-    document.getElementById("btn-learn").textContent = t.resumed ? "続きから" : "始める";
-  }
+  // 「つづける」カード:次の行動(復習・続きのステージ・実践・実力判定)を1枚のリストに集約
+  // 並びは優先度順。説明文は持たせず「ラベル+補足+シェブロン」の行で統一する
+  function renderContinueCard() {
+    const rows = [];
 
-  // 実力判定テストカード:最高評価を常時表示して更新意欲につなげる
-  function renderExamCard() {
-    const best = state.exam.best;
-    const pill = document.getElementById("exam-best-pill");
-    const desc = document.getElementById("exam-desc");
-    const btn = document.getElementById("btn-exam");
-    if (!best) {
-      pill.classList.add("hidden");
-      desc.textContent = "全分野からランダムに15問を出題して実力を評価します。後半ほど難しくなります。";
-      btn.textContent = "実力を測る";
-      return;
+    const reviewCount = Object.keys(state.wrong).length;
+    if (reviewCount > 0) {
+      rows.push({ label: "復習", sub: `${reviewCount}問待ち`, accent: true, onTap: startReview });
     }
-    pill.textContent = `最高評価 ${best.rank}`;
-    pill.className = `exam-best-pill rank-${best.rank.toLowerCase()}`;
-    desc.textContent = best.rank === "S"
-      ? "最高評価Sを獲得済みです。全問正解の実力を維持できるか試しましょう。"
-      : `最高評価は${best.rank}(${best.score}/${examMaxScore()}点)。学習を進めて評価の更新を目指しましょう。`;
-    btn.textContent = "再挑戦する";
+
+    const t = pickLearnTarget();
+    if (t) {
+      const cat = QUIZ_DATA.find(c => c.id === t.catId);
+      rows.push({
+        label: `${cat.name} ${cat.stages[t.stageIdx].name}`,
+        sub: t.resumed ? "続きから" : "次のステージ",
+        onTap: () => startQuiz(t.catId, t.stageIdx),
+      });
+    }
+
+    const practiceCount = unlockedScenarios().length;
+    if (practiceCount > 0) {
+      rows.push({
+        label: "実践問題",
+        sub: `${Math.min(practiceCount, PRACTICE_SIZE)}問に挑戦`,
+        onTap: startPractice,
+      });
+    }
+
+    rows.push({
+      label: "実力判定テスト",
+      sub: state.exam.best ? `最高評価 ${state.exam.best.rank}` : "未挑戦",
+      onTap: startExam,
+    });
+
+    const list = document.getElementById("continue-list");
+    list.innerHTML = "";
+    for (const r of rows) {
+      const btn = document.createElement("button");
+      btn.className = "continue-item";
+      btn.innerHTML = `
+        <span class="continue-label">${r.label}</span>
+        <span class="continue-sub${r.accent ? " accent" : ""}">${r.sub}</span>
+        <span class="library-item-chev" aria-hidden="true">›</span>`;
+      btn.addEventListener("click", r.onTap);
+      list.appendChild(btn);
+    }
   }
 
   function renderHome() {
@@ -516,8 +532,7 @@
 
     renderWeekStrip();
     renderToday();
-    renderLearnCard();
-    renderExamCard();
+    renderContinueCard();
 
     // 本日の目標(1行サマリー+タップ展開)
     const doneCount = MISSIONS.filter(m => state.daily.claimed.includes(m.id)).length;
@@ -541,34 +556,8 @@
       missionList.appendChild(el);
     }
 
-    // 復習カード(待ちがあるときだけ表示)
-    const reviewCount = Object.keys(state.wrong).length;
-    const card = document.getElementById("home-review-card");
-    card.classList.toggle("hidden", reviewCount === 0);
-    if (reviewCount > 0) {
-      document.getElementById("review-desc").textContent =
-        `間違えた問題が ${reviewCount}問 あります。正解すればリストから消えます。`;
-      document.getElementById("btn-review").textContent =
-        `復習する(${Math.min(reviewCount, REVIEW_SIZE)}問)`;
-    }
-
     renderTalkCard();
-    renderPracticeCard();
   }
-
-  // 実践問題カード:挑戦できる問題(=知識カード解放済み)があるときだけ表示
-  function renderPracticeCard() {
-    const n = unlockedScenarios().length;
-    const card = document.getElementById("home-practice-card");
-    card.classList.toggle("hidden", n === 0);
-    if (n === 0) return;
-    document.getElementById("practice-desc").textContent =
-      `集めた知識を「使える」か、場面で試す問題です。いま挑戦できるのは ${n}問。`;
-    document.getElementById("btn-practice").textContent =
-      `挑戦する(${Math.min(n, PRACTICE_SIZE)}問)`;
-  }
-
-  document.getElementById("btn-practice").addEventListener("click", startPractice);
 
   // ---------- 「今日の一語り」(解放済みカードの日替わり再提示) ----------
 
@@ -1779,12 +1768,6 @@
   });
 
   document.getElementById("btn-start").addEventListener("click", () => startDaily());
-  document.getElementById("btn-learn").addEventListener("click", () => {
-    const t = pickLearnTarget();
-    if (t) startQuiz(t.catId, t.stageIdx);
-  });
-  document.getElementById("btn-review").addEventListener("click", () => startReview());
-  document.getElementById("btn-exam").addEventListener("click", () => startExam());
   document.getElementById("btn-review-start").addEventListener("click", () => startReview());
   document.getElementById("btn-stages-back").addEventListener("click", () => {
     renderMap();

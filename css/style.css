@@ -544,6 +544,24 @@ button:focus-visible {
 .lib-related-item:active { background: var(--btn2); }
 .lib-box .btn { width: 100%; margin-top: 18px; font-size: 14px; padding: 12px; }
 
+/* 「つづける」カード(次の行動のリスト) */
+.continue-card { padding: 14px 16px; }
+.continue-card .card-title { margin-bottom: 2px; }
+.continue-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  background: none; border: none; border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-family: inherit; color: var(--text); text-align: left;
+  padding: 13px 2px;
+  transition: background 0.15s ease;
+}
+.continue-item:last-child { border-bottom: none; padding-bottom: 6px; }
+.continue-item:active { background: var(--pill); }
+.continue-label { flex: 1; font-size: 14px; font-weight: 700; line-height: 1.5; }
+.continue-sub { font-size: 12px; font-weight: 700; color: var(--text-dim); white-space: nowrap; }
+.continue-sub.accent { color: var(--accent); }
+
 /* 今日の一語りカード(ホーム・カード全体がタップ領域) */
 .talk-card {
   display: block; width: 100%;
@@ -665,18 +683,6 @@ button:focus-visible {
 .rank-b { background: linear-gradient(180deg, #60a5fa, #2563eb); }
 .rank-c { background: linear-gradient(180deg, #fb923c, #ea580c); }
 .rank-d { background: linear-gradient(180deg, #94a3b8, #64748b); }
-
-.exam-head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.exam-head .card-title { margin-bottom: 0; }
-.exam-best-pill {
-  color: #fff; font-size: 12px; font-weight: 800;
-  padding: 3px 12px; border-radius: 999px;
-  white-space: nowrap;
-}
 
 /* リザルトの評価表示 */
 .result-rank { margin-bottom: 8px; }
