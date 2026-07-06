@@ -844,6 +844,15 @@
     verdict.className = `explanation-verdict ${isCorrect ? "good" : "bad"}`;
     document.getElementById("explanation-text").textContent = q.exp;
 
+    // 使いどころ(この知識が活きる場面。データがある問題のみ表示)
+    const useWrap = document.getElementById("explanation-use");
+    if (q.lib && q.lib.use) {
+      document.getElementById("explanation-use-text").textContent = q.lib.use;
+      useWrap.classList.remove("hidden");
+    } else {
+      useWrap.classList.add("hidden");
+    }
+
     // 「もっと知る」コラム(タップで展開。ライブラリにも収録)
     const moreWrap = document.getElementById("explanation-more");
     if (q.lib && q.lib.more) {
@@ -1301,6 +1310,11 @@
     document.getElementById("lib-answer").textContent = q.choices[q.answer];
     document.getElementById("lib-exp").textContent = q.exp;
     document.getElementById("lib-more").textContent = q.lib.more;
+    const hasUse = !!q.lib.use;
+    document.getElementById("lib-use-label").classList.toggle("hidden", !hasUse);
+    const useEl = document.getElementById("lib-use");
+    useEl.classList.toggle("hidden", !hasUse);
+    useEl.textContent = q.lib.use || "";
     libOverlay.classList.remove("hidden");
   }
 

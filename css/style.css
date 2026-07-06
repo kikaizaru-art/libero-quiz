@@ -424,6 +424,25 @@ button:focus-visible {
   margin-top: 8px;
 }
 
+/* 使いどころ(解説シート・ライブラリ詳細で共通のラベル) */
+.use-label {
+  font-size: 11px; font-weight: 800;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+.explanation-use {
+  margin-top: 12px;
+  background: var(--pill);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  padding: 10px 14px 12px;
+}
+.explanation-use-text {
+  font-size: 13px; line-height: 1.75;
+  color: var(--text);
+  margin-top: 4px;
+}
+
 /* ライブラリ詳細モーダル */
 .modal-box.lib-box { text-align: left; max-height: 80dvh; overflow-y: auto; }
 .lib-cat {
@@ -446,6 +465,16 @@ button:focus-visible {
   font-size: 13px; line-height: 1.75;
   color: var(--text);
   background: var(--pill);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 6px;
+}
+.lib-use-label { margin-top: 14px; }
+.lib-box .lib-use {
+  font-size: 13px; line-height: 1.75;
+  color: var(--text);
+  background: var(--pill);
+  border-left: 3px solid var(--accent);
   border-radius: 12px;
   padding: 12px 14px;
   margin-top: 6px;

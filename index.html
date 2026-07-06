@@ -163,7 +163,7 @@
         <h1>ライブラリ</h1>
         <p id="library-sub"></p>
       </header>
-      <p class="library-note">クイズで出会った問題が知識カードとして集まります。カードを開くと、解説と「もっと知る」コラムをいつでも見返せます。</p>
+      <p class="library-note">クイズで出会った問題が、会話や仕事で語れる知識カードとして集まります。カードを開くと、解説・「もっと知る」コラム・使いどころをいつでも見返せます。</p>
       <div class="library-tabs" id="library-tabs" role="tablist" aria-label="分野の切り替え"></div>
       <div id="library-list"></div>
     </section>
@@ -279,6 +279,10 @@
     <div class="explanation-sheet" id="explanation" role="region" aria-label="解説">
       <div class="explanation-verdict" id="explanation-verdict"></div>
       <p id="explanation-text"></p>
+      <div class="explanation-use hidden" id="explanation-use">
+        <div class="use-label">使いどころ</div>
+        <p class="explanation-use-text" id="explanation-use-text"></p>
+      </div>
       <div class="explanation-more hidden" id="explanation-more">
         <button class="explanation-more-btn" id="btn-more" aria-expanded="false"></button>
         <p class="explanation-more-text hidden" id="explanation-more-text"></p>
@@ -323,6 +327,8 @@
         <p class="lib-exp" id="lib-exp"></p>
         <div class="lib-more-label">もっと知る</div>
         <p class="lib-more" id="lib-more"></p>
+        <div class="lib-use-label use-label hidden" id="lib-use-label">使いどころ</div>
+        <p class="lib-use hidden" id="lib-use"></p>
         <button class="btn btn-secondary" id="btn-lib-close">閉じる</button>
       </div>
     </div>
