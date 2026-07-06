@@ -420,16 +420,21 @@
 
   function renderToday() {
     ensureDaily();
-    const desc = document.getElementById("today-desc");
-    const btn = document.getElementById("btn-start");
-    const catNames = dailyCatNames();
-    if (state.daily.todayDone) {
-      desc.textContent = `今日の5問はクリア済みです。もう一度挑戦してXPを稼げます(${catNames.join("・")})`;
-      btn.textContent = "もう一度挑戦";
-    } else {
-      desc.textContent = `いろいろな分野から日替わりで5問出題(今日は ${catNames.join("・")})`;
-      btn.textContent = "始める";
+    // 今日の5問クリア後は主CTAカードを小さな完了帯に畳み、
+    // 一語りと学習メニューを画面の上へ繰り上げる
+    const done = state.daily.todayDone;
+    document.getElementById("home-today-card").classList.toggle("hidden", done);
+    document.getElementById("today-done-card").classList.toggle("hidden", !done);
+
+    if (done) {
+      const names = dailyCatNames(dateStr(new Date(Date.now() + 86400000)));
+      document.getElementById("today-done-sub").textContent =
+        `タップでもう一度挑戦 ・ 明日は ${names.join("・")} から出題`;
+      return;
     }
+
+    document.getElementById("today-desc").textContent =
+      `いろいろな分野から日替わりで5問出題(今日は ${dailyCatNames().join("・")})`;
 
     // 連続記録のフック:今日まだ学習していなければ「つなぐ」動機を見せる
     const hook = document.getElementById("today-hook");
@@ -1768,6 +1773,7 @@
   });
 
   document.getElementById("btn-start").addEventListener("click", () => startDaily());
+  document.getElementById("today-done-card").addEventListener("click", () => startDaily());
   document.getElementById("btn-review-start").addEventListener("click", () => startReview());
   document.getElementById("btn-stages-back").addEventListener("click", () => {
     renderMap();

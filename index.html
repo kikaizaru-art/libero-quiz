@@ -15,6 +15,7 @@
 
     <!-- ホーム画面 -->
     <section id="screen-home" class="screen active">
+      <div class="card status-band">
       <header class="player-header">
         <div class="player-info">
           <div class="player-row">
@@ -31,12 +32,30 @@
 
       <div class="week-strip" id="week-strip" aria-label="今週の学習"></div>
 
-      <div class="card today-card">
+      <button class="missions-summary" id="missions-toggle" aria-expanded="false" aria-controls="mission-list">
+        <span class="card-title">本日の目標</span>
+        <span class="missions-dots" id="missions-dots" aria-hidden="true"></span>
+        <span class="missions-count" id="missions-count"></span>
+        <span class="missions-chev" aria-hidden="true">▾</span>
+      </button>
+      <div id="mission-list" class="hidden"></div>
+      </div>
+
+      <div class="card today-card" id="home-today-card">
         <div class="today-label">今日の5問</div>
         <p class="today-desc" id="today-desc"></p>
         <p class="today-hook hidden" id="today-hook"></p>
         <button class="btn btn-primary btn-big" id="btn-start">始める</button>
       </div>
+
+      <button class="card today-done-card hidden" id="today-done-card">
+        <span class="today-done-check" aria-hidden="true">✓</span>
+        <span class="today-done-text">
+          <span class="today-done-title">今日の5問 クリア済み</span>
+          <span class="today-done-sub" id="today-done-sub"></span>
+        </span>
+        <span class="talk-chev" aria-hidden="true">›</span>
+      </button>
 
       <button class="card talk-card hidden" id="home-talk-card">
         <div class="talk-head">
@@ -50,16 +69,6 @@
       <div class="card continue-card" id="home-continue-card">
         <h2 class="card-title">学習メニュー</h2>
         <div id="continue-list"></div>
-      </div>
-
-      <div class="card missions-card" id="missions-card">
-        <button class="missions-summary" id="missions-toggle" aria-expanded="false" aria-controls="mission-list">
-          <span class="card-title">本日の目標</span>
-          <span class="missions-dots" id="missions-dots" aria-hidden="true"></span>
-          <span class="missions-count" id="missions-count"></span>
-          <span class="missions-chev" aria-hidden="true">▾</span>
-        </button>
-        <div id="mission-list" class="hidden"></div>
       </div>
 
     </section>
