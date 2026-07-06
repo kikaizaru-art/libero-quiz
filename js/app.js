@@ -13,6 +13,7 @@
   const REVIEW_SIZE = 5;        // 復習1回あたりの出題数
   const REVIEW_PERFECT_BONUS = 15;
   const DAILY_SIZE = 5;         // 「今日の5問」の出題数
+  const PRACTICE_SIZE = 5;      // 実践問題1回あたりの出題数
   const DAILY_BONUS = 20;       // 「今日の5問」を初回クリアしたときのボーナスXP
   const FREEZE_MAX = 2;         // ストリークフリーズの最大ストック数
   const FREEZE_EVERY = 7;       // 7日連続ごとにフリーズを1個獲得
@@ -550,7 +551,22 @@
     }
 
     renderTalkCard();
+    renderPracticeCard();
   }
+
+  // 実践問題カード:挑戦できる問題(=知識カード解放済み)があるときだけ表示
+  function renderPracticeCard() {
+    const n = unlockedScenarios().length;
+    const card = document.getElementById("home-practice-card");
+    card.classList.toggle("hidden", n === 0);
+    if (n === 0) return;
+    document.getElementById("practice-desc").textContent =
+      `集めた知識を「使える」か、場面で試す問題です。いま挑戦できるのは ${n}問。`;
+    document.getElementById("btn-practice").textContent =
+      `挑戦する(${Math.min(n, PRACTICE_SIZE)}問)`;
+  }
+
+  document.getElementById("btn-practice").addEventListener("click", startPractice);
 
   // ---------- 「今日の一語り」(解放済みカードの日替わり再提示) ----------
 
@@ -649,8 +665,8 @@
 
   // ---------- クイズ本体 ----------
 
-  // mode: "stage"(通常) | "review"(復習) | "daily"(今日の5問) | "exam"(実力判定テスト)
-  // items: [{ catId, stageIdx, qIdx }]
+  // mode: "stage"(通常) | "review"(復習) | "daily"(今日の5問) | "exam"(実力判定テスト) | "practice"(実践問題)
+  // items: [{ catId, stageIdx, qIdx }] または実践問題の [{ scenarioIdx }]
   let quiz = null; // { mode, catId, stageIdx, items, index, correct, combo, maxCombo, xp, mastered, wrongList, score, stageCorrect, catLost }
 
   function shuffle(arr) {
@@ -749,8 +765,30 @@
   }
 
   function questionAt(item) {
+    if (item.scenarioIdx !== undefined) return SCENARIO_DATA[item.scenarioIdx];
     const cat = QUIZ_DATA.find(c => c.id === item.catId);
     return cat.stages[item.stageIdx].questions[item.qIdx];
+  }
+
+  // ---------- 実践問題(シナリオ問題) ----------
+
+  // 対応する知識カードを解放済みの実践問題だけが挑戦できる
+  function unlockedScenarios() {
+    return SCENARIO_DATA
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => {
+        const e = TITLE_INDEX[s.libTitle];
+        return e && state.seen[e.key];
+      });
+  }
+
+  function startPractice() {
+    const pool = unlockedScenarios();
+    if (pool.length === 0) return;
+    const items = shuffle(pool).slice(0, PRACTICE_SIZE).map(({ i }) => ({ scenarioIdx: i }));
+    quiz = newQuiz("practice", null, null, items);
+    show("screen-quiz");
+    renderQuestion();
   }
 
   function currentQuestion() {
@@ -764,8 +802,8 @@
 
   function renderQuestion() {
     const item = quiz.items[quiz.index];
-    const cat = QUIZ_DATA.find(c => c.id === item.catId);
     const q = currentQuestion();
+    const cat = QUIZ_DATA.find(c => c.id === (item.scenarioIdx !== undefined ? q.catId : item.catId));
     const total = quiz.items.length;
 
     closeSheet();
@@ -775,6 +813,7 @@
     const metaPrefix = quiz.mode === "review" ? `復習(${cat.name})`
       : quiz.mode === "daily" ? `今日の5問(${cat.name})`
       : quiz.mode === "exam" ? `実力判定テスト ${cat.stages[item.stageIdx].name}(${cat.name})`
+      : quiz.mode === "practice" ? `実践問題(${cat.name})`
       : `${cat.name} ${cat.stages[item.stageIdx].name}`;
     document.getElementById("quiz-meta").textContent =
       `${metaPrefix} ・ 第${quiz.index + 1}問 / 全${total}問`;
@@ -792,20 +831,37 @@
     choicesEl.innerHTML = "";
     // 選択肢の並びも毎回シャッフル
     const order = shuffle(q.choices.map((_, i) => i));
-    order.forEach(choiceIdx => {
-      const btn = document.createElement("button");
-      btn.className = "choice";
-      btn.dataset.index = choiceIdx;
-      btn.textContent = q.choices[choiceIdx];
-      btn.addEventListener("click", () => answer(choiceIdx, btn));
-      choicesEl.appendChild(btn);
-    });
+    const buildChoices = () => {
+      choicesEl.innerHTML = "";
+      order.forEach(choiceIdx => {
+        const btn = document.createElement("button");
+        btn.className = "choice";
+        btn.dataset.index = choiceIdx;
+        btn.textContent = q.choices[choiceIdx];
+        btn.addEventListener("click", () => answer(choiceIdx, btn));
+        choicesEl.appendChild(btn);
+      });
+    };
+    if (quiz.mode === "review") {
+      // 想起チェック:選択肢を見る前に自力で思い出す1クッション(テスト効果)
+      const cover = document.createElement("button");
+      cover.className = "recall-cover";
+      cover.innerHTML = `
+        <span class="recall-cover-title">まず、頭の中で答えてみましょう</span>
+        <span class="recall-cover-sub">思い出せたらタップして選択肢を表示</span>`;
+      cover.addEventListener("click", buildChoices);
+      choicesEl.appendChild(cover);
+    } else {
+      buildChoices();
+    }
   }
 
   function answer(choiceIdx, clickedBtn) {
     const q = currentQuestion();
     const item = quiz.items[quiz.index];
-    const wrongKey = `${item.catId}:${item.stageIdx}:${item.qIdx}`;
+    // 実践問題は進捗キー(catId:stageIdx:qIdx)を持たないため、seen・復習リスト・分野別成績には触れない
+    const isScenario = item.scenarioIdx !== undefined;
+    const wrongKey = isScenario ? null : `${item.catId}:${item.stageIdx}:${item.qIdx}`;
     const isCorrect = choiceIdx === q.answer;
     const buttons = document.querySelectorAll("#choices .choice");
     buttons.forEach(b => {
@@ -815,12 +871,14 @@
     });
 
     state.totals.answered++;
-    state.seen[wrongKey] = true; // 出会った問題はライブラリに解放
+    if (!isScenario) {
+      state.seen[wrongKey] = true; // 出会った問題はライブラリに解放
 
-    // 分野別成績・日別解答数(記録画面用)
-    const cs = state.catStats[item.catId] || (state.catStats[item.catId] = { answered: 0, correct: 0 });
-    cs.answered++;
-    if (isCorrect) cs.correct++;
+      // 分野別成績(記録画面用)
+      const cs = state.catStats[item.catId] || (state.catStats[item.catId] = { answered: 0, correct: 0 });
+      cs.answered++;
+      if (isCorrect) cs.correct++;
+    }
     const today = todayStr();
     state.activity[today] = (state.activity[today] || 0) + 1;
 
@@ -835,9 +893,9 @@
       }
     }
 
-    // 復習リストの更新:間違えたら追加、正解したら除去
+    // 復習リストの更新:間違えたら追加、正解したら除去(実践問題は対象外)
     if (isCorrect) {
-      if (state.wrong[wrongKey]) {
+      if (!isScenario && state.wrong[wrongKey]) {
         delete state.wrong[wrongKey];
         if (quiz.mode === "review") {
           quiz.mastered++;
@@ -845,10 +903,12 @@
         }
       }
     } else {
-      const entry = state.wrong[wrongKey] || { count: 0, last: null };
-      entry.count++;
-      entry.last = today;
-      state.wrong[wrongKey] = entry;
+      if (!isScenario) {
+        const entry = state.wrong[wrongKey] || { count: 0, last: null };
+        entry.count++;
+        entry.last = today;
+        state.wrong[wrongKey] = entry;
+      }
       quiz.wrongList.push({ q: q.q, correct: q.choices[q.answer] });
     }
 
@@ -886,10 +946,12 @@
     }
 
     // 「もっと知る」コラム(タップで展開。ライブラリにも収録)
+    // 実践問題では元になった知識カード(libTitle)のコラムを出し、知識との紐づきを示す
+    const lib = q.lib || (q.libTitle && TITLE_INDEX[q.libTitle] ? TITLE_INDEX[q.libTitle].q.lib : null);
     const moreWrap = document.getElementById("explanation-more");
-    if (q.lib && q.lib.more) {
-      document.getElementById("btn-more").textContent = `もっと知る:${q.lib.title}`;
-      document.getElementById("explanation-more-text").textContent = q.lib.more;
+    if (lib && lib.more) {
+      document.getElementById("btn-more").textContent = `もっと知る:${lib.title}`;
+      document.getElementById("explanation-more-text").textContent = lib.more;
       setMoreOpen(false);
       moreWrap.classList.remove("hidden");
     } else {
@@ -977,6 +1039,8 @@
       </div>`).join("");
     document.getElementById("recap-note").textContent = quiz.mode === "review"
       ? "この問題は復習リストに残っています。復習タブからいつでも再挑戦できます。"
+      : quiz.mode === "practice"
+      ? "実践問題は復習リストには入りません。関連する知識カードをライブラリで見返しておきましょう。"
       : "間違えた問題は復習リストに追加しました。復習タブからいつでも挑戦できます。";
   }
 
@@ -1006,7 +1070,7 @@
     saveState();
 
     document.getElementById("result-title").textContent =
-      mode === "review" ? "復習完了" : "今日の5問 完了";
+      mode === "review" ? "復習完了" : mode === "practice" ? "実践問題 完了" : "今日の5問 完了";
     document.getElementById("result-stars").classList.add("hidden");
     document.getElementById("result-rank").classList.add("hidden");
     document.getElementById("result-exam-detail").classList.add("hidden");
@@ -1025,6 +1089,10 @@
       btnRetry.classList.toggle("hidden", remaining === 0);
       btnRetry.textContent = "続けて復習";
       btnRetry.onclick = () => startReview();
+    } else if (mode === "practice") {
+      btnRetry.classList.remove("hidden");
+      btnRetry.textContent = "もう一度挑戦";
+      btnRetry.onclick = () => startPractice();
     } else {
       btnRetry.classList.remove("hidden");
       btnRetry.textContent = "もう一度挑戦";
