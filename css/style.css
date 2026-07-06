@@ -282,14 +282,29 @@ button:focus-visible {
 .today-hook { font-size: 12px; font-weight: 700; color: var(--accent); margin-top: 8px; }
 .today-card .btn-big { margin: 14px 0 0; }
 
-/* 本日の目標 */
+/* 本日の目標(1行サマリー+タップ展開) */
 .missions-card { padding: 0; }
 .missions-summary {
   display: flex; align-items: center; gap: 10px;
-  padding: 14px 16px 2px;
+  width: 100%;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; color: var(--text); text-align: left;
+  padding: 14px 16px;
 }
+.missions-summary:active { background: var(--pill); border-radius: var(--radius); }
 .missions-summary .card-title { margin-bottom: 0; flex: 1; }
+.missions-dots { display: flex; gap: 4px; }
+.m-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--track);
+}
+.m-dot.done { background: var(--good); }
 .missions-count { font-size: 12px; font-weight: 700; color: var(--text-dim); white-space: nowrap; }
+.missions-chev {
+  color: var(--text-dim); font-size: 12px;
+  transition: transform 0.2s ease;
+}
+.missions-summary[aria-expanded="true"] .missions-chev { transform: rotate(180deg); }
 #mission-list { padding: 0 16px 14px; }
 
 .mission {
@@ -529,11 +544,26 @@ button:focus-visible {
 .lib-related-item:active { background: var(--btn2); }
 .lib-box .btn { width: 100%; margin-top: 18px; font-size: 14px; padding: 12px; }
 
-/* 今日の一語りカード(ホーム) */
+/* 今日の一語りカード(ホーム・カード全体がタップ領域) */
+.talk-card {
+  display: block; width: 100%;
+  font-family: inherit; color: var(--text); text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.talk-card:active { background: var(--pill); }
+.talk-head { display: flex; align-items: center; }
+.talk-head .card-title { margin-bottom: 0; flex: 1; }
+.talk-chev { color: var(--text-dim); font-size: 16px; font-weight: 700; }
 .talk-title {
   display: flex; align-items: center; gap: 8px;
   font-size: 14px; font-weight: 800;
-  margin: 8px 0 6px;
+  margin: 10px 0 0;
+}
+.talk-preview {
+  font-size: 12px; color: var(--text-dim); line-height: 1.7;
+  margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 /* ---------- 記録画面 ---------- */

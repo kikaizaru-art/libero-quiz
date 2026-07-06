@@ -38,6 +38,15 @@
         <button class="btn btn-primary btn-big" id="btn-start">始める</button>
       </div>
 
+      <button class="card talk-card hidden" id="home-talk-card">
+        <div class="talk-head">
+          <span class="card-title">今日の一語り</span>
+          <span class="talk-chev" aria-hidden="true">›</span>
+        </div>
+        <div class="talk-title" id="talk-title"></div>
+        <p class="talk-preview" id="talk-use"></p>
+      </button>
+
       <div class="card learn-card hidden" id="home-learn-card">
         <h2 class="card-title">学習を進める</h2>
         <p class="review-desc" id="learn-desc"></p>
@@ -60,24 +69,19 @@
       </div>
 
       <div class="card missions-card" id="missions-card">
-        <div class="missions-summary">
+        <button class="missions-summary" id="missions-toggle" aria-expanded="false" aria-controls="mission-list">
           <span class="card-title">本日の目標</span>
+          <span class="missions-dots" id="missions-dots" aria-hidden="true"></span>
           <span class="missions-count" id="missions-count"></span>
-        </div>
-        <div id="mission-list"></div>
+          <span class="missions-chev" aria-hidden="true">▾</span>
+        </button>
+        <div id="mission-list" class="hidden"></div>
       </div>
 
       <div class="card review-card hidden" id="home-review-card">
         <h2 class="card-title">復習</h2>
         <p class="review-desc" id="review-desc"></p>
         <button class="btn btn-secondary btn-review" id="btn-review">復習する</button>
-      </div>
-
-      <div class="card talk-card hidden" id="home-talk-card">
-        <h2 class="card-title">今日の一語り</h2>
-        <div class="talk-title" id="talk-title"></div>
-        <p class="review-desc" id="talk-use"></p>
-        <button class="btn btn-secondary btn-review" id="btn-talk">カードを開く</button>
       </div>
     </section>
 

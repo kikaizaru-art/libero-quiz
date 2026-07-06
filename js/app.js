@@ -519,9 +519,11 @@
     renderLearnCard();
     renderExamCard();
 
-    // 本日の目標
+    // 本日の目標(1行サマリー+タップ展開)
     const doneCount = MISSIONS.filter(m => state.daily.claimed.includes(m.id)).length;
     document.getElementById("missions-count").textContent = `${doneCount}/${MISSIONS.length} 達成`;
+    document.getElementById("missions-dots").innerHTML =
+      MISSIONS.map(m => `<i class="m-dot${state.daily.claimed.includes(m.id) ? " done" : ""}"></i>`).join("");
 
     const missionList = document.getElementById("mission-list");
     missionList.innerHTML = "";
@@ -593,7 +595,8 @@
     document.getElementById("talk-use").textContent = pick.q.lib.use;
   }
 
-  document.getElementById("btn-talk").addEventListener("click", () => {
+  // カード全体がタップ領域(ライブラリ詳細を開く)
+  document.getElementById("home-talk-card").addEventListener("click", () => {
     const pick = talkPick();
     if (pick) openLibEntry(pick.cat, pick.q);
   });
@@ -1766,6 +1769,14 @@
   );
 
   // ---------- 共通イベント ----------
+
+  // 本日の目標の開閉(展開状態はセッション内のみ保持)
+  document.getElementById("missions-toggle").addEventListener("click", () => {
+    const toggle = document.getElementById("missions-toggle");
+    const open = toggle.getAttribute("aria-expanded") !== "true";
+    toggle.setAttribute("aria-expanded", String(open));
+    document.getElementById("mission-list").classList.toggle("hidden", !open);
+  });
 
   document.getElementById("btn-start").addEventListener("click", () => startDaily());
   document.getElementById("btn-learn").addEventListener("click", () => {
