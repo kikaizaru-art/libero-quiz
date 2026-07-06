@@ -468,7 +468,7 @@
     document.getElementById("week-strip").innerHTML = html;
   }
 
-  // 「つづける」カード:次の行動(復習・続きのステージ・実践・実力判定)を1枚のリストに集約
+  // 「学習メニュー」カード:次の行動(復習・続きのステージ・実践・実力判定)を1枚のリストに集約
   // 並びは優先度順。説明文は持たせず「ラベル+補足+シェブロン」の行で統一する
   function renderContinueCard() {
     const rows = [];
