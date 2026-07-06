@@ -480,7 +480,7 @@
 
     const reviewCount = Object.keys(state.wrong).length;
     if (reviewCount > 0) {
-      rows.push({ label: "復習", sub: `${reviewCount}問待ち`, accent: true, onTap: startReview });
+      rows.push({ label: "復習", sub: `${reviewCount}問待ち`, accent: true, onTap: () => startReview() });
     }
 
     const t = pickLearnTarget();
@@ -696,8 +696,11 @@
     renderQuestion();
   }
 
-  function startReview() {
-    const keys = shuffle(Object.keys(state.wrong)).slice(0, REVIEW_SIZE);
+  // catId を渡すとその分野の復習待ちだけから出題する(復習画面の分野ピル用)
+  function startReview(catId) {
+    let pool = Object.keys(state.wrong);
+    if (catId) pool = pool.filter(k => k.startsWith(catId + ":"));
+    const keys = shuffle(pool).slice(0, REVIEW_SIZE);
     if (keys.length === 0) return;
     const items = keys.map(k => {
       const [catId, stageIdx, qIdx] = k.split(":");
@@ -1262,44 +1265,49 @@
 
   // ---------- 復習画面 ----------
 
+  let reviewListOpen = false; // 苦手リストの展開状態(セッション内のみ)
+
   function renderReview() {
     const keys = Object.keys(state.wrong);
     const n = keys.length;
 
     document.getElementById("review-sub").textContent =
-      n > 0 ? `復習待ちが ${n}問 あります` : "復習待ちはありません";
+      n > 0 ? "正解すると復習リストから消えます(克服)" : "苦手をなくして知識を定着させましょう";
 
-    const desc = document.getElementById("review-screen-desc");
-    const btn = document.getElementById("btn-review-start");
-    if (n > 0) {
-      desc.textContent = "間違えた問題から最大5問を出題します。正解するとリストから消えます(克服)。";
-      btn.textContent = `復習する(${Math.min(n, REVIEW_SIZE)}問)`;
-      btn.disabled = false;
+    const card = document.getElementById("review-card");
+    const emptyCard = document.getElementById("review-empty-card");
+    card.classList.toggle("hidden", n === 0);
+    emptyCard.classList.toggle("hidden", n > 0);
+
+    if (n === 0) {
+      // 空状態:今日の5問が未クリアなら、そのまま始められる導線を出す
+      document.getElementById("review-goto-daily").classList.toggle("hidden", state.daily.todayDone);
     } else {
-      desc.textContent = "間違えた問題がここに溜まります。今は復習する問題がありません。";
-      btn.textContent = "復習する";
-      btn.disabled = true;
-    }
+      document.getElementById("review-count").textContent = `復習待ち ${n}問`;
+      document.getElementById("btn-review-start").textContent =
+        `復習する(${Math.min(n, REVIEW_SIZE)}問)`;
 
-    // 分野別の内訳
-    const catsCard = document.getElementById("review-cats-card");
-    catsCard.classList.toggle("hidden", n === 0);
-    if (n > 0) {
+      // 分野別の内訳ピル(タップでその分野だけ復習)
       const counts = {};
       keys.forEach(k => {
         const catId = k.split(":")[0];
         counts[catId] = (counts[catId] || 0) + 1;
       });
-      document.getElementById("review-cats").innerHTML = QUIZ_DATA
-        .filter(c => counts[c.id])
-        .map(c => `
-          <div class="review-cat">
-            <span class="review-cat-name">${c.name}</span>
-            <span class="review-cat-count">${counts[c.id]}問</span>
-          </div>`).join("");
+      const pillsEl = document.getElementById("review-cats");
+      pillsEl.innerHTML = "";
+      for (const c of QUIZ_DATA.filter(c => counts[c.id])) {
+        const btn = document.createElement("button");
+        btn.className = "review-cat-pill";
+        btn.innerHTML = `
+          <i class="review-cat-dot" style="background:${c.color}" aria-hidden="true"></i>
+          <span>${c.name}</span>
+          <span class="review-cat-pill-count">${counts[c.id]}</span>`;
+        btn.addEventListener("click", () => startReview(c.id));
+        pillsEl.appendChild(btn);
+      }
     }
 
-    // 間違えた回数が多い問題(正解はネタバレしない)
+    // 間違えた回数が多い問題(上位3件+展開。正解はネタバレしない)
     const listCard = document.getElementById("review-list-card");
     listCard.classList.toggle("hidden", n === 0);
     if (n > 0) {
@@ -1308,12 +1316,16 @@
         const cat = QUIZ_DATA.find(c => c.id === catId);
         const q = cat.stages[Number(si)].questions[Number(qi)];
         return { catName: cat.name, text: q.q, count: state.wrong[k].count };
-      }).sort((a, b) => b.count - a.count).slice(0, 8);
-      document.getElementById("review-list").innerHTML = entries.map(e => `
+      }).sort((a, b) => b.count - a.count);
+      const shown = reviewListOpen ? entries : entries.slice(0, 3);
+      document.getElementById("review-list").innerHTML = shown.map(e => `
         <div class="review-item">
           <div class="review-item-q">${e.text.length > 42 ? e.text.slice(0, 42) + "…" : e.text}</div>
           <div class="review-item-meta">${e.catName} ・ ${e.count}回 間違えました</div>
         </div>`).join("");
+      const more = document.getElementById("review-list-more");
+      more.classList.toggle("hidden", reviewListOpen || entries.length <= 3);
+      more.textContent = `すべて見る(${entries.length}問)`;
     }
   }
 
@@ -1827,6 +1839,11 @@
   document.getElementById("btn-start").addEventListener("click", () => startDaily());
   document.getElementById("today-done-card").addEventListener("click", () => startDaily());
   document.getElementById("btn-review-start").addEventListener("click", () => startReview());
+  document.getElementById("review-list-more").addEventListener("click", () => {
+    reviewListOpen = true;
+    renderReview();
+  });
+  document.getElementById("review-goto-daily").addEventListener("click", () => startDaily());
   document.getElementById("btn-stages-back").addEventListener("click", () => {
     renderMap();
     show("screen-map");

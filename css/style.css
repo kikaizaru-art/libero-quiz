@@ -375,15 +375,32 @@ button:focus-visible {
 .btn-review:disabled:active, .btn-review-start:disabled:active { transform: none; }
 .btn-review-start { margin: 4px 0 0; }
 
-.review-cat {
-  display: flex; justify-content: space-between; align-items: baseline;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
+.review-count { font-size: 16px; font-weight: 800; }
+/* 分野別の内訳ピル(タップでその分野だけ復習) */
+.review-cat-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.review-cat-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border-strong); cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 700;
+  color: var(--text);
+  background: var(--pill);
+  border-radius: 999px;
+  padding: 6px 11px;
+  transition: background 0.15s ease;
 }
-.review-cat:last-child { border-bottom: none; padding-bottom: 0; }
-.review-cat-name { font-weight: 700; }
-.review-cat-count { color: var(--text-dim); font-size: 12px; }
+.review-cat-pill:active { background: var(--card); }
+.review-cat-dot { width: 8px; height: 8px; border-radius: 50%; }
+.review-cat-pill-count { color: var(--text-dim); font-weight: 800; }
+
+/* リストの「すべて見る」展開ボタン(復習・記録で共用) */
+.list-more-btn {
+  display: block; width: 100%;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 700;
+  color: var(--link);
+  padding: 10px 0 2px;
+  text-align: center;
+}
 
 .review-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .review-item:last-child { border-bottom: none; padding-bottom: 0; }
