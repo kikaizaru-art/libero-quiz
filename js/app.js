@@ -1590,21 +1590,31 @@
 
   // ---------- バッジ描画 ----------
 
+  let badgesLockedOpen = false; // 未達成バッジの展開状態(セッション内のみ)
+
   function renderBadges() {
     document.getElementById("badges-count").textContent =
       `${state.badges.length} / ${BADGES.length} 個 解除済み`;
+    const owned = BADGES.filter(b => state.badges.includes(b.id));
+    const locked = BADGES.filter(b => !state.badges.includes(b.id));
+    // 解除済みが主役。未達成は「見る」を選んだときだけ(1個もなければ最初から一覧)
+    const showLocked = badgesLockedOpen || owned.length === 0;
+
     const list = document.getElementById("badge-list");
     list.innerHTML = "";
-    for (const b of BADGES) {
-      const owned = state.badges.includes(b.id);
+    for (const b of [...owned, ...(showLocked ? locked : [])]) {
+      const isOwned = state.badges.includes(b.id);
       const el = document.createElement("div");
-      el.className = `badge${owned ? "" : " locked"}`;
+      el.className = `badge${isOwned ? "" : " locked"}`;
       el.innerHTML = `
-        <div class="badge-status">${owned ? "達成" : "未達成"}</div>
+        <div class="badge-status">${isOwned ? "達成" : "未達成"}</div>
         <div class="badge-name">${b.name}</div>
         <div class="badge-desc">${b.desc}</div>`;
       list.appendChild(el);
     }
+    const more = document.getElementById("badges-more");
+    more.classList.toggle("hidden", showLocked || locked.length === 0);
+    more.textContent = `未達成のバッジを見る(${locked.length}個)`;
   }
 
   // ---------- 記録画面 ----------
@@ -1623,21 +1633,31 @@
   );
 
   function renderStats() {
-    // サマリー
+    // サマリー(1段4タイル。累計解答・正解は正答率タイルの下段に吸収)
     const learnedDays = Object.keys(state.activity).length;
     const rate = state.totals.answered > 0
       ? Math.round((state.totals.correct / state.totals.answered) * 100) : 0;
     const summary = [
-      { value: learnedDays, label: "学習日数" },
       { value: `${effectiveStreak().count}日`, label: "連続学習" },
-      { value: state.totals.answered, label: "累計解答" },
-      { value: state.totals.correct, label: "累計正解" },
-      { value: `${rate}%`, label: "正答率" },
-      { value: Object.keys(state.wrong).length, label: "復習待ち" },
+      { value: learnedDays, label: "学習日数" },
+      { value: `${rate}%`, label: "正答率", sub: `${state.totals.correct}/${state.totals.answered}問` },
+      { value: Object.keys(state.wrong).length, label: "復習待ち ›", tap: true },
     ];
-    document.getElementById("stats-summary").innerHTML = summary.map(s =>
-      `<div class="stat"><div class="stat-value">${s.value}</div><div class="stat-label">${s.label}</div></div>`
-    ).join("");
+    const summaryEl = document.getElementById("stats-summary");
+    summaryEl.innerHTML = "";
+    for (const s of summary) {
+      const el = document.createElement(s.tap ? "button" : "div");
+      el.className = `stat${s.tap ? " stat-tap" : ""}`;
+      el.innerHTML = `
+        <div class="stat-value">${s.value}</div>
+        <div class="stat-label">${s.label}</div>
+        ${s.sub ? `<div class="stat-sub">${s.sub}</div>` : ""}`;
+      if (s.tap) el.addEventListener("click", () => {
+        show("screen-review");
+        renderReview();
+      });
+      summaryEl.appendChild(el);
+    }
 
     renderCalendar();
 
@@ -1648,7 +1668,10 @@
     renderExamHistory();
   }
 
-  // 実力判定テストの挑戦履歴(直近)。未挑戦なら非表示
+  // 実力判定テストの挑戦履歴(直近5件+展開)。未挑戦なら非表示
+  const EXAM_HISTORY_SHOWN = 5;
+  let examHistoryOpen = false; // 展開状態(セッション内のみ)
+
   function renderExamHistory() {
     const card = document.getElementById("exam-history-card");
     const h = state.exam.history;
@@ -1657,18 +1680,23 @@
     const best = state.exam.best;
     document.getElementById("exam-history-best").textContent =
       best ? `最高評価 ${best.rank}(${best.score}/${examMaxScore()}点)` : "";
-    document.getElementById("exam-history").innerHTML = h.map(e => `
+    const shown = examHistoryOpen ? h : h.slice(0, EXAM_HISTORY_SHOWN);
+    document.getElementById("exam-history").innerHTML = shown.map(e => `
       <div class="exam-history-item">
         <span class="exam-history-rank rank-${e.rank.toLowerCase()}">${e.rank}</span>
         <span class="exam-history-score">${e.score}/${examMaxScore()}点</span>
         <span class="exam-history-date">${e.date}</span>
       </div>`).join("");
+    const more = document.getElementById("exam-history-more");
+    more.classList.toggle("hidden", examHistoryOpen || h.length <= EXAM_HISTORY_SHOWN);
+    more.textContent = `すべて見る(${h.length}件)`;
   }
 
   // ---------- 学習カレンダー(月別) ----------
 
   const CAL_MONTHS = 6;          // タブに出す月数(当月含む直近6ヶ月)
   let calSelected = null;        // "YYYY-M"(月は0始まり)。nullなら当月
+  let calPicked = null;          // タップで選択中の日付キー("YYYY-MM-DD")。nullなら今日
 
   function activityLevel(n) {
     return n === 0 ? 0 : n < 5 ? 1 : n < 10 ? 2 : n < 20 ? 3 : 4;
@@ -1691,11 +1719,12 @@
     tabsEl.querySelectorAll(".cal-tab").forEach(btn =>
       btn.addEventListener("click", () => {
         calSelected = btn.dataset.key;
+        calPicked = null; // 月をまたいだ選択は持ち越さない
         renderCalendar();
       })
     );
 
-    // カレンダー本体
+    // カレンダー本体(問数はセルに書かず濃淡のみ。学習日はタップで詳細)
     const [y, m] = calSelected.split("-").map(Number);
     const firstDay = new Date(y, m, 1).getDay();
     const daysInMonth = new Date(y, m + 1, 0).getDate();
@@ -1708,21 +1737,35 @@
       const n = state.activity[key] || 0;
       const cls = [
         "cal-cell", `l${activityLevel(n)}`,
+        key === (calPicked || todayKey) ? "picked" : "",
         key === todayKey ? "today" : "",
         date > now ? "future" : "",
       ].filter(Boolean).join(" ");
-      cells += `
-        <div class="${cls}">
-          <span class="cal-day">${day}</span>
-          ${n > 0 ? `<span class="cal-count">${n}問</span>` : ""}
-        </div>`;
+      cells += n > 0
+        ? `<button class="${cls}" data-date="${key}" data-count="${n}" data-label="${m + 1}月${day}日"><span class="cal-day">${day}</span></button>`
+        : `<div class="${cls}"><span class="cal-day">${day}</span></div>`;
     }
-    document.getElementById("cal-grid").innerHTML = cells;
+    const grid = document.getElementById("cal-grid");
+    grid.innerHTML = cells;
+    grid.querySelectorAll("[data-date]").forEach(btn =>
+      btn.addEventListener("click", () => {
+        calPicked = btn.dataset.date;
+        renderCalendar();
+      })
+    );
 
-    // 今日の学習量をひとことで
-    const todayN = state.activity[todayKey] || 0;
-    document.getElementById("cal-today-note").textContent =
-      todayN > 0 ? `今日は ${todayN}問 解答しました` : "今日はまだ解答していません";
+    // フッター:選択日(既定は今日)の学習量をひとことで
+    const noteEl = document.getElementById("cal-today-note");
+    if (calPicked && calPicked !== todayKey) {
+      const pickedBtn = grid.querySelector(`[data-date="${calPicked}"]`);
+      noteEl.textContent = pickedBtn
+        ? `${pickedBtn.dataset.label} ・ ${pickedBtn.dataset.count}問 解答`
+        : "";
+    } else {
+      const todayN = state.activity[todayKey] || 0;
+      noteEl.textContent =
+        todayN > 0 ? `今日は ${todayN}問 解答しました` : "今日はまだ解答していません";
+    }
   }
 
   function renderCatRates() {
@@ -1844,6 +1887,14 @@
     renderReview();
   });
   document.getElementById("review-goto-daily").addEventListener("click", () => startDaily());
+  document.getElementById("exam-history-more").addEventListener("click", () => {
+    examHistoryOpen = true;
+    renderExamHistory();
+  });
+  document.getElementById("badges-more").addEventListener("click", () => {
+    badgesLockedOpen = true;
+    renderBadges();
+  });
   document.getElementById("btn-stages-back").addEventListener("click", () => {
     renderMap();
     show("screen-map");

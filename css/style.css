@@ -363,8 +363,15 @@ button:focus-visible {
 .mission.done .mission-reward { color: var(--good); }
 
 /* 統計 */
-.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .stat { text-align: center; }
+/* 復習待ちタイル(タップで復習タブへ) */
+.stat-tap {
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; color: inherit; padding: 0;
+}
+.stat-tap:active .stat-value { color: var(--accent); }
+.stat-sub { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
 .stat-value { font-size: 20px; font-weight: 800; color: var(--text); }
 .stat-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
@@ -705,24 +712,24 @@ button:focus-visible {
 .cal-head.sat { color: #60a5fa; }
 
 .cal-cell {
-  min-height: 46px;
+  min-height: 34px;
+  border: none; padding: 0; font-family: inherit;
   border-radius: 8px;
   background: var(--pill);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 1px;
 }
+button.cal-cell { cursor: pointer; }
 .cal-cell.empty { background: transparent; }
 .cal-cell.future { opacity: 0.35; }
 .cal-day { font-size: 11px; font-weight: 700; color: var(--text-dim); }
-.cal-count { font-size: 10px; font-weight: 700; }
 .cal-cell.l1 { background: #1e40af; }
 .cal-cell.l2 { background: #2563eb; }
 .cal-cell.l3 { background: #60a5fa; }
 .cal-cell.l4 { background: #bfdbfe; }
 .cal-cell.l1 .cal-day, .cal-cell.l2 .cal-day { color: rgba(255, 255, 255, 0.85); }
-.cal-cell.l1 .cal-count, .cal-cell.l2 .cal-count { color: #fff; }
-.cal-cell.l3 .cal-day, .cal-cell.l3 .cal-count,
-.cal-cell.l4 .cal-day, .cal-cell.l4 .cal-count { color: #0f172a; }
+.cal-cell.l3 .cal-day, .cal-cell.l4 .cal-day { color: #0f172a; }
+/* タップで選択中の日(既定は今日)。今日のリングが常に優先 */
+.cal-cell.picked { box-shadow: 0 0 0 2px var(--text-dim); }
 .cal-cell.today { box-shadow: 0 0 0 2px var(--accent); }
 
 .cal-foot {
