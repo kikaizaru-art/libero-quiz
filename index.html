@@ -29,9 +29,12 @@
         </button>
       </header>
 
+      <div class="week-strip" id="week-strip" aria-label="今週の学習"></div>
+
       <div class="card today-card">
         <div class="today-label">今日の5問</div>
         <p class="today-desc" id="today-desc"></p>
+        <p class="today-hook hidden" id="today-hook"></p>
         <button class="btn btn-primary btn-big" id="btn-start">始める</button>
       </div>
 
@@ -97,6 +100,7 @@
         <h1 class="result-title" id="result-title">クリア</h1>
         <div class="result-stars" id="result-stars"></div>
         <div class="result-score" id="result-score"></div>
+        <div class="result-streak hidden" id="result-streak"></div>
         <div class="card result-xp-card">
           <div class="xp-gain" id="result-xp">+0 XP</div>
           <div class="xp-bar"><div class="xp-fill" id="result-xp-fill"></div></div>
@@ -107,6 +111,7 @@
           <div id="recap-list"></div>
           <p class="recap-note" id="recap-note"></p>
         </div>
+        <p class="result-tomorrow hidden" id="result-tomorrow"></p>
         <div class="result-buttons">
           <button class="btn btn-secondary" id="btn-retry">再挑戦</button>
           <button class="btn btn-primary" id="btn-continue">次へ</button>
