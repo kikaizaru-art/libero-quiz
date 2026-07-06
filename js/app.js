@@ -168,14 +168,14 @@
       // 1日空いたが、フリーズを消費して連続記録を維持
       state.streak.freezes--;
       state.streak.count++;
-      toast("❄️ フリーズが連続記録を守りました");
+      toast("フリーズが連続記録を守りました");
     } else {
       state.streak.count = 1;
     }
     state.streak.last = today;
     if (state.streak.count % FREEZE_EVERY === 0 && state.streak.freezes < FREEZE_MAX) {
       state.streak.freezes++;
-      toast(`❄️ ${state.streak.count}日連続達成!フリーズを1個獲得(1日休んでも記録が守られます)`);
+      toast(`${state.streak.count}日連続達成!フリーズを1個獲得(1日休んでも記録が守られます)`);
     }
     if (state.streak.count >= 3) awardBadge("streak3");
     if (state.streak.count >= 7) awardBadge("streak7");
@@ -411,7 +411,7 @@
     const hook = document.getElementById("today-hook");
     const s = effectiveStreak();
     if (!s.doneToday && s.count > 0) {
-      hook.textContent = `🔥 今日学習すれば連続${s.count + 1}日目`;
+      hook.textContent = `今日学習すれば連続${s.count + 1}日目`;
       hook.classList.remove("hidden");
     } else {
       hook.classList.add("hidden");
@@ -461,11 +461,11 @@
     ensureDaily();
     const info = levelInfo(state.xp);
     document.getElementById("home-level").textContent = info.level;
-    // ストリークピル:今日学習済みなら点灯、未学習ならグレー(消えた炎)
+    // ストリークピル:今日学習済みなら点灯、未学習ならグレー表示
     const s = effectiveStreak();
     const pill = document.getElementById("home-streak");
-    pill.textContent = `🔥 連続 ${s.count}日` +
-      (state.streak.freezes > 0 ? ` ❄️×${state.streak.freezes}` : "");
+    pill.textContent = `連続 ${s.count}日` +
+      (state.streak.freezes > 0 ? ` ・ フリーズ×${state.streak.freezes}` : "");
     pill.classList.toggle("lit", s.doneToday);
     document.getElementById("home-xp-fill").style.width = `${(info.current / info.needed) * 100}%`;
     document.getElementById("home-xp-text").textContent = `${info.current} / ${info.needed} XP`;
@@ -800,7 +800,7 @@
   function renderStreakResult(firstToday) {
     const el = document.getElementById("result-streak");
     el.classList.toggle("hidden", !firstToday);
-    if (firstToday) el.textContent = `🔥 連続${state.streak.count}日目!`;
+    if (firstToday) el.textContent = `連続${state.streak.count}日目!`;
   }
 
   // 今日の5問のリザルトで明日の出題分野を予告する(明日また開く理由づくり)

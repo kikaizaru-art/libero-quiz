@@ -226,8 +226,7 @@ button:focus-visible {
   color: var(--text-dim); font-size: 12px; font-weight: 700;
   padding: 3px 10px; border-radius: 999px;
 }
-/* 今日未学習の間は炎を消す(グレー表示)。学習済みで点灯 */
-.streak-pill:not(.lit) { filter: grayscale(1); }
+/* 今日学習済みならアクセント色で点灯 */
 .streak-pill.lit {
   color: var(--accent);
   background: rgba(234, 179, 8, 0.14);
