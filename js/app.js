@@ -14,6 +14,8 @@
   const REVIEW_PERFECT_BONUS = 15;
   const DAILY_SIZE = 5;         // 「今日の5問」の出題数
   const DAILY_BONUS = 20;       // 「今日の5問」を初回クリアしたときのボーナスXP
+  const FREEZE_MAX = 2;         // ストリークフリーズの最大ストック数
+  const FREEZE_EVERY = 7;       // 7日連続ごとにフリーズを1個獲得
 
   const MISSIONS = [
     { id: "clear",   name: "ステージを1回クリアする", goal: 1,  reward: 30, key: "clears" },
@@ -29,6 +31,15 @@
     { id: "allcats",     name: "全分野着手", desc: "全分野で1ステージ以上クリア" },
     { id: "streak3",     name: "3日連続学習", desc: "3日連続で学習" },
     { id: "streak7",     name: "7日連続学習", desc: "7日連続で学習" },
+    { id: "streak14",    name: "14日連続学習", desc: "14日連続で学習" },
+    { id: "streak30",    name: "30日連続学習", desc: "30日連続で学習" },
+    { id: "streak50",    name: "50日連続学習", desc: "50日連続で学習" },
+    { id: "streak100",   name: "100日連続学習", desc: "100日連続で学習" },
+    { id: "days10",      name: "学習10日", desc: "累計10日学習する" },
+    { id: "days30",      name: "学習30日", desc: "累計30日学習する" },
+    { id: "days100",     name: "学習100日", desc: "累計100日学習する" },
+    { id: "daily7",      name: "日課の芽", desc: "今日の5問を7回クリア" },
+    { id: "daily30",     name: "日課の木", desc: "今日の5問を30回クリア" },
     { id: "level5",      name: "レベル5到達", desc: "レベル5に到達" },
     { id: "level10",     name: "レベル10到達", desc: "レベル10に到達" },
     ...QUIZ_DATA.map(c => ({
@@ -44,10 +55,10 @@
     return {
       xp: 0,
       stages: {},                                  // "catId-stageIdx" -> { stars, best }
-      streak: { count: 0, last: null },
+      streak: { count: 0, last: null, freezes: 0 },
       daily: { date: null, clears: 0, correct: 0, combo: 0, claimed: [], todayDone: false },
       badges: [],
-      totals: { answered: 0, correct: 0, perfects: 0, maxCombo: 0, clears: 0, reviewMastered: 0 },
+      totals: { answered: 0, correct: 0, perfects: 0, maxCombo: 0, clears: 0, reviewMastered: 0, dailyClears: 0 },
       wrong: {},                                   // "catId:stageIdx:qIdx" -> { count, last }
       seen: {},                                    // "catId:stageIdx:qIdx" -> true(ライブラリ解放済み)
       catStats: {},                                // catId -> { answered, correct }
@@ -65,6 +76,7 @@
       const merged = Object.assign(base, saved);
       // 旧バージョンのセーブデータに新フィールドを補完
       merged.totals = Object.assign(defaultState().totals, saved.totals || {});
+      merged.streak = Object.assign(defaultState().streak, saved.streak || {});
       // 旧データ移行:復習リストにある問題は出会い済みなのでライブラリを解放
       for (const k of Object.keys(merged.wrong)) merged.seen[k] = true;
       return merged;
@@ -149,10 +161,39 @@
     const today = todayStr();
     if (state.streak.last === today) return;
     const yStr = dateStr(new Date(Date.now() - 86400000));
-    state.streak.count = state.streak.last === yStr ? state.streak.count + 1 : 1;
+    const y2Str = dateStr(new Date(Date.now() - 2 * 86400000));
+    if (state.streak.last === yStr) {
+      state.streak.count++;
+    } else if (state.streak.last === y2Str && state.streak.freezes > 0) {
+      // 1日空いたが、フリーズを消費して連続記録を維持
+      state.streak.freezes--;
+      state.streak.count++;
+      toast("フリーズが連続記録を守りました");
+    } else {
+      state.streak.count = 1;
+    }
     state.streak.last = today;
+    if (state.streak.count % FREEZE_EVERY === 0 && state.streak.freezes < FREEZE_MAX) {
+      state.streak.freezes++;
+      toast(`${state.streak.count}日連続達成!フリーズを1個獲得(1日休んでも記録が守られます)`);
+    }
     if (state.streak.count >= 3) awardBadge("streak3");
     if (state.streak.count >= 7) awardBadge("streak7");
+    if (state.streak.count >= 14) awardBadge("streak14");
+    if (state.streak.count >= 30) awardBadge("streak30");
+    if (state.streak.count >= 50) awardBadge("streak50");
+    if (state.streak.count >= 100) awardBadge("streak100");
+  }
+
+  // 表示用の実効ストリーク。昨日まで続いている(またはフリーズで守れる)間は count を維持し、
+  // 途切れが確定していれば 0 を返す
+  function effectiveStreak() {
+    const doneToday = state.streak.last === todayStr();
+    const yStr = dateStr(new Date(Date.now() - 86400000));
+    const y2Str = dateStr(new Date(Date.now() - 2 * 86400000));
+    const alive = doneToday || state.streak.last === yStr ||
+      (state.streak.last === y2Str && state.streak.freezes > 0);
+    return { count: alive ? state.streak.count : 0, doneToday };
   }
 
   // ---------- 通知・演出 ----------
@@ -212,6 +253,13 @@
     if (state.totals.perfects >= 1) awardBadge("perfect");
     if (state.totals.maxCombo >= 5) awardBadge("combo5");
     if (state.totals.reviewMastered >= 10) awardBadge("review10");
+
+    const learnedDays = Object.keys(state.activity).length;
+    if (learnedDays >= 10) awardBadge("days10");
+    if (learnedDays >= 30) awardBadge("days30");
+    if (learnedDays >= 100) awardBadge("days100");
+    if (state.totals.dailyClears >= 7) awardBadge("daily7");
+    if (state.totals.dailyClears >= 30) awardBadge("daily30");
 
     const clearedAllCats = QUIZ_DATA.every(c =>
       c.stages.some((_, i) => (state.stages[`${c.id}-${i}`] || {}).stars >= 1)
@@ -295,8 +343,9 @@
 
   // 今日の5問:日替わりで分野をシャッフルし、5分野から1問ずつ選ぶ
   // ステージ進捗や解放状況とは無関係に全問題から出題する
-  function dailyItems() {
-    const rnd = seededRandom(`daily-${todayStr()}`);
+  // forDate を渡すと任意の日のセットを先読みできる(明日の予告に使用)
+  function dailyItems(forDate = todayStr()) {
+    const rnd = seededRandom(`daily-${forDate}`);
     const cats = shuffleWith(QUIZ_DATA, rnd).slice(0, DAILY_SIZE);
     const items = cats.map(cat => {
       const pool = [];
@@ -317,6 +366,11 @@
       }
     }
     return items;
+  }
+
+  // その日の「今日の5問」に含まれる分野名(重複除去)
+  function dailyCatNames(forDate = todayStr()) {
+    return [...new Set(dailyItems(forDate).map(it => QUIZ_DATA.find(c => c.id === it.catId).name))];
   }
 
   // ---------- 画面遷移 ----------
@@ -344,7 +398,7 @@
     ensureDaily();
     const desc = document.getElementById("today-desc");
     const btn = document.getElementById("btn-start");
-    const catNames = [...new Set(dailyItems().map(it => QUIZ_DATA.find(c => c.id === it.catId).name))];
+    const catNames = dailyCatNames();
     if (state.daily.todayDone) {
       desc.textContent = `今日の5問はクリア済みです。もう一度挑戦してXPを稼げます(${catNames.join("・")})`;
       btn.textContent = "もう一度挑戦";
@@ -352,6 +406,42 @@
       desc.textContent = `いろいろな分野から日替わりで5問出題(今日は ${catNames.join("・")})`;
       btn.textContent = "始める";
     }
+
+    // 連続記録のフック:今日まだ学習していなければ「つなぐ」動機を見せる
+    const hook = document.getElementById("today-hook");
+    const s = effectiveStreak();
+    if (!s.doneToday && s.count > 0) {
+      hook.textContent = `今日学習すれば連続${s.count + 1}日目`;
+      hook.classList.remove("hidden");
+    } else {
+      hook.classList.add("hidden");
+    }
+  }
+
+  // 今週の学習ドット(日曜はじまり。記録タブのカレンダーと同じ並び)
+  function renderWeekStrip() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    const labels = ["日", "月", "火", "水", "木", "金", "土"];
+    const todayKey = todayStr();
+    let html = "";
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      const key = dateStr(d);
+      const done = (state.activity[key] || 0) > 0;
+      const cls = [
+        "week-day",
+        done ? "done" : "",
+        key === todayKey ? "today" : "",
+        d > now ? "future" : "",
+      ].filter(Boolean).join(" ");
+      html += `
+        <div class="${cls}">
+          <span class="week-day-label">${labels[i]}</span>
+          <span class="week-day-dot">${done ? "✓" : ""}</span>
+        </div>`;
+    }
+    document.getElementById("week-strip").innerHTML = html;
   }
 
   // 「学習を進める」カード(ステージ学習の続き)
@@ -371,10 +461,16 @@
     ensureDaily();
     const info = levelInfo(state.xp);
     document.getElementById("home-level").textContent = info.level;
-    document.getElementById("home-streak").textContent = `連続 ${state.streak.count}日`;
+    // ストリークピル:今日学習済みなら点灯、未学習ならグレー表示
+    const s = effectiveStreak();
+    const pill = document.getElementById("home-streak");
+    pill.textContent = `連続 ${s.count}日` +
+      (state.streak.freezes > 0 ? ` ・ フリーズ×${state.streak.freezes}` : "");
+    pill.classList.toggle("lit", s.doneToday);
     document.getElementById("home-xp-fill").style.width = `${(info.current / info.needed) * 100}%`;
     document.getElementById("home-xp-text").textContent = `${info.current} / ${info.needed} XP`;
 
+    renderWeekStrip();
     renderToday();
     renderLearnCard();
 
@@ -700,6 +796,23 @@
       `Lv.${info.level} ・ 次のレベルまで あと${info.needed - info.current}XP`;
   }
 
+  // その日最初の学習完了なら、連続日数を大きく見せて祝う
+  function renderStreakResult(firstToday) {
+    const el = document.getElementById("result-streak");
+    el.classList.toggle("hidden", !firstToday);
+    if (firstToday) el.textContent = `連続${state.streak.count}日目!`;
+  }
+
+  // 今日の5問のリザルトで明日の出題分野を予告する(明日また開く理由づくり)
+  function renderTomorrow(showIt) {
+    const el = document.getElementById("result-tomorrow");
+    el.classList.toggle("hidden", !showIt);
+    if (showIt) {
+      const names = dailyCatNames(dateStr(new Date(Date.now() + 86400000)));
+      el.textContent = `明日の5問は ${names.join("・")} から出題。また明日ここで会いましょう`;
+    }
+  }
+
   // 間違えた問題のふりかえり
   function renderRecap() {
     const card = document.getElementById("result-recap");
@@ -731,10 +844,12 @@
       if (!state.daily.todayDone) {
         state.daily.todayDone = true;
         dailyFirst = true;
+        state.totals.dailyClears++;
         earnedXp += DAILY_BONUS;
       }
     }
 
+    const firstStudyToday = state.streak.last !== todayStr();
     touchStreak();
     gainXp(earnedXp);
     checkMissions();
@@ -749,6 +864,8 @@
       (mode === "review" && quiz.mastered > 0 ? ` ・ ${quiz.mastered}問を克服` : "") +
       (dailyFirst ? ` ・ 初回クリアボーナス +${DAILY_BONUS}XP` : "");
     renderResultXp(earnedXp);
+    renderStreakResult(firstStudyToday);
+    renderTomorrow(mode === "daily");
     renderRecap();
 
     const btnRetry = document.getElementById("btn-retry");
@@ -788,11 +905,13 @@
     record.best = Math.max(record.best, quiz.correct);
     state.stages[key] = record;
 
+    let firstStudyToday = false;
     if (cleared) {
       state.totals.clears++;
       if (perfect) state.totals.perfects++;
       ensureDaily();
       state.daily.clears++;
+      firstStudyToday = state.streak.last !== todayStr();
       touchStreak();
     }
 
@@ -812,6 +931,8 @@
       `${total}問中 ${quiz.correct}問正解 ・ 最大${quiz.maxCombo}問連続正解` +
       (cleared ? "" : ` (${PASS_LINE}問正解でクリア)`);
     renderResultXp(earnedXp);
+    renderStreakResult(firstStudyToday);
+    renderTomorrow(false);
     renderRecap();
 
     const btnRetry = document.getElementById("btn-retry");
@@ -1038,7 +1159,7 @@
       ? Math.round((state.totals.correct / state.totals.answered) * 100) : 0;
     const summary = [
       { value: learnedDays, label: "学習日数" },
-      { value: `${state.streak.count}日`, label: "連続学習" },
+      { value: `${effectiveStreak().count}日`, label: "連続学習" },
       { value: state.totals.answered, label: "累計解答" },
       { value: state.totals.correct, label: "累計正解" },
       { value: `${rate}%`, label: "正答率" },
