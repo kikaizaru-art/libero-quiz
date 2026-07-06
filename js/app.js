@@ -9,7 +9,7 @@
   const COMBO_BONUS = 2;        // 2コンボ目以降、1問ごとに (コンボ数-1)×2 XP
   const CLEAR_BONUS = 20;
   const PERFECT_BONUS = 30;
-  const PASS_LINE = 3;          // 5問中3問正解でクリア
+  const PASS_RATE = 0.6;        // 出題数の6割(切り上げ)正解でクリア(8問なら5問)
   const REVIEW_SIZE = 5;        // 復習1回あたりの出題数
   const REVIEW_PERFECT_BONUS = 15;
   const DAILY_SIZE = 5;         // 「今日の5問」の出題数
@@ -885,10 +885,14 @@
 
   // ---------- リザルト ----------
 
+  function passLineFor(total) {
+    return Math.ceil(total * PASS_RATE);
+  }
+
   function starsFor(correct, total) {
     if (correct >= total) return 3;
     if (correct >= total - 1) return 2;
-    if (correct >= PASS_LINE) return 1;
+    if (correct >= passLineFor(total)) return 1;
     return 0;
   }
 
@@ -1125,7 +1129,7 @@
       [1, 2, 3].map(i => `<span class="star${i <= stars ? " earned" : ""}">★</span>`).join("");
     document.getElementById("result-score").textContent =
       `${total}問中 ${quiz.correct}問正解 ・ 最大${quiz.maxCombo}問連続正解` +
-      (cleared ? "" : ` (${PASS_LINE}問正解でクリア)`);
+      (cleared ? "" : ` (${passLineFor(total)}問正解でクリア)`);
     renderResultXp(earnedXp);
     renderStreakResult(firstStudyToday);
     renderTomorrow(false);
