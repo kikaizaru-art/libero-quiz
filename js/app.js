@@ -17,6 +17,23 @@
   const FREEZE_MAX = 2;         // ストリークフリーズの最大ストック数
   const FREEZE_EVERY = 7;       // 7日連続ごとにフリーズを1個獲得
 
+  // 腕試し:全分野から初級・中級・上級を5問ずつ、計15問を難易度順に出題して実力を評価
+  const EXAM_SIZE_PER_STAGE = 5;              // 各難易度からの出題数
+  const EXAM_MAX_PER_CAT = 3;                 // 同一分野の出題上限(偏り防止)
+  const EXAM_POINTS = [1, 2, 3];              // 初級1点・中級2点・上級3点(満点30点)
+  const EXAM_STAGE_NAMES = ["初級", "中級", "上級"];
+  // 上から順に判定する(min はそのランクに必要な最低点)
+  const EXAM_RANKS = [
+    { rank: "S", min: 30, label: "全問正解。非の打ちどころのない実力です" },
+    { rank: "A", min: 26, label: "上級レベルまで対応できる確かな実力です" },
+    { rank: "B", min: 20, label: "中級までは安定。上級が伸びしろです" },
+    { rank: "C", min: 13, label: "初級は着実。中級を固めていきましょう" },
+    { rank: "D", min: 0,  label: "これからが伸びどき。初級から始めましょう" },
+  ];
+  const EXAM_RANK_BONUS = { S: 60, A: 40, B: 25, C: 10, D: 0 };
+  const EXAM_BEST_BONUS = 30;                 // 自己ベスト更新ボーナスXP
+  const EXAM_HISTORY_MAX = 10;                // 記録タブに残す挑戦履歴の件数
+
   const MISSIONS = [
     { id: "clear",   name: "ステージを1回クリアする", goal: 1,  reward: 30, key: "clears" },
     { id: "correct", name: "10問正解する",           goal: 10, reward: 30, key: "correct" },
@@ -42,6 +59,10 @@
     { id: "daily30",     name: "日課の木", desc: "今日の5問を30回クリア" },
     { id: "level5",      name: "レベル5到達", desc: "レベル5に到達" },
     { id: "level10",     name: "レベル10到達", desc: "レベル10に到達" },
+    { id: "exam_first",  name: "腕試し初挑戦", desc: "腕試しに初めて挑戦" },
+    { id: "exam_b",      name: "B評価到達", desc: "腕試しでB評価以上を獲得" },
+    { id: "exam_a",      name: "A評価到達", desc: "腕試しでA評価以上を獲得" },
+    { id: "exam_s",      name: "S評価獲得", desc: "腕試しでS評価を獲得" },
     ...QUIZ_DATA.map(c => ({
       id: `master_${c.id}`, name: `${c.name}マスター`,
       desc: `${c.name}の全ステージで星3を獲得`,
@@ -64,6 +85,7 @@
       catStats: {},                                // catId -> { answered, correct }
       activity: {},                                // "YYYY-MM-DD" -> その日の解答数
       lastStage: null,                             // { catId, stageIdx } 最後に挑戦したステージ
+      exam: { best: null, history: [] },           // best: { rank, score, date } / history: 直近の挑戦記録
     };
   }
 
@@ -77,6 +99,7 @@
       // 旧バージョンのセーブデータに新フィールドを補完
       merged.totals = Object.assign(defaultState().totals, saved.totals || {});
       merged.streak = Object.assign(defaultState().streak, saved.streak || {});
+      merged.exam = Object.assign(defaultState().exam, saved.exam || {});
       // 旧データ移行:復習リストにある問題は出会い済みなのでライブラリを解放
       for (const k of Object.keys(merged.wrong)) merged.seen[k] = true;
       return merged;
@@ -457,6 +480,26 @@
     document.getElementById("btn-learn").textContent = t.resumed ? "続きから" : "始める";
   }
 
+  // 腕試しカード:最高評価を常時表示して更新意欲につなげる
+  function renderExamCard() {
+    const best = state.exam.best;
+    const pill = document.getElementById("exam-best-pill");
+    const desc = document.getElementById("exam-desc");
+    const btn = document.getElementById("btn-exam");
+    if (!best) {
+      pill.classList.add("hidden");
+      desc.textContent = "全分野からランダムに15問を出題して実力を評価します。後半ほど難しくなります。";
+      btn.textContent = "実力を測る";
+      return;
+    }
+    pill.textContent = `最高評価 ${best.rank}`;
+    pill.className = `exam-best-pill rank-${best.rank.toLowerCase()}`;
+    desc.textContent = best.rank === "S"
+      ? "最高評価Sを獲得済みです。全問正解の実力を維持できるか試しましょう。"
+      : `最高評価は${best.rank}(${best.score}/${examMaxScore()}点)。学習を進めて評価の更新を目指しましょう。`;
+    btn.textContent = "再挑戦する";
+  }
+
   function renderHome() {
     ensureDaily();
     const info = levelInfo(state.xp);
@@ -473,6 +516,7 @@
     renderWeekStrip();
     renderToday();
     renderLearnCard();
+    renderExamCard();
 
     // 本日の目標
     const doneCount = MISSIONS.filter(m => state.daily.claimed.includes(m.id)).length;
@@ -573,9 +617,9 @@
 
   // ---------- クイズ本体 ----------
 
-  // mode: "stage"(通常) | "review"(復習) | "daily"(今日の5問)
+  // mode: "stage"(通常) | "review"(復習) | "daily"(今日の5問) | "exam"(腕試し)
   // items: [{ catId, stageIdx, qIdx }]
-  let quiz = null; // { mode, catId, stageIdx, items, index, correct, combo, maxCombo, xp, mastered, wrongList }
+  let quiz = null; // { mode, catId, stageIdx, items, index, correct, combo, maxCombo, xp, mastered, wrongList, score, stageCorrect, catLost }
 
   function shuffle(arr) {
     const a = arr.slice();
@@ -591,6 +635,8 @@
       mode, catId, stageIdx, items,
       index: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, mastered: 0,
       wrongList: [],
+      // 腕試し用:難易度加重スコアと内訳(他モードでは未使用)
+      score: 0, stageCorrect: [0, 0, 0], catLost: {},
     };
   }
 
@@ -624,6 +670,52 @@
     renderQuestion();
   }
 
+  // ---------- 腕試し(全問ランダムの実力テスト) ----------
+
+  // 初級→中級→上級の順に各5問。各層内はランダムで、同一分野は全体で最大3問まで
+  function examItems() {
+    const catCount = {};
+    const items = [];
+    for (let si = 0; si < EXAM_STAGE_NAMES.length; si++) {
+      const pool = [];
+      QUIZ_DATA.forEach(cat => {
+        if (!cat.stages[si]) return;
+        cat.stages[si].questions.forEach((_, qi) => pool.push({ catId: cat.id, stageIdx: si, qIdx: qi }));
+      });
+      const shuffled = shuffle(pool);
+      let picked = 0;
+      for (const it of shuffled) {
+        if (picked >= EXAM_SIZE_PER_STAGE) break;
+        if ((catCount[it.catId] || 0) >= EXAM_MAX_PER_CAT) continue;
+        catCount[it.catId] = (catCount[it.catId] || 0) + 1;
+        items.push(it);
+        picked++;
+      }
+      // 保険:分野上限で埋まらない場合は制約なしで補充
+      for (const it of shuffled) {
+        if (picked >= EXAM_SIZE_PER_STAGE) break;
+        if (items.includes(it)) continue;
+        items.push(it);
+        picked++;
+      }
+    }
+    return items;
+  }
+
+  function examMaxScore() {
+    return EXAM_POINTS.reduce((a, p) => a + p * EXAM_SIZE_PER_STAGE, 0);
+  }
+
+  function examRankFor(score) {
+    return EXAM_RANKS.find(r => score >= r.min);
+  }
+
+  function startExam() {
+    quiz = newQuiz("exam", null, null, examItems());
+    show("screen-quiz");
+    renderQuestion();
+  }
+
   function questionAt(item) {
     const cat = QUIZ_DATA.find(c => c.id === item.catId);
     return cat.stages[item.stageIdx].questions[item.qIdx];
@@ -650,6 +742,7 @@
     document.getElementById("quiz-progress-text").textContent = `${quiz.index + 1}/${total}`;
     const metaPrefix = quiz.mode === "review" ? `復習(${cat.name})`
       : quiz.mode === "daily" ? `今日の5問(${cat.name})`
+      : quiz.mode === "exam" ? `腕試し ${cat.stages[item.stageIdx].name}(${cat.name})`
       : `${cat.name} ${cat.stages[item.stageIdx].name}`;
     document.getElementById("quiz-meta").textContent =
       `${metaPrefix} ・ 第${quiz.index + 1}問 / 全${total}問`;
@@ -698,6 +791,17 @@
     if (isCorrect) cs.correct++;
     const today = todayStr();
     state.activity[today] = (state.activity[today] || 0) + 1;
+
+    // 腕試しの採点:難易度加重(初級1点・中級2点・上級3点)。失点は分野別に記録
+    if (quiz.mode === "exam") {
+      const pts = EXAM_POINTS[item.stageIdx] || 1;
+      if (isCorrect) {
+        quiz.score += pts;
+        quiz.stageCorrect[item.stageIdx]++;
+      } else {
+        quiz.catLost[item.catId] = (quiz.catLost[item.catId] || 0) + pts;
+      }
+    }
 
     // 復習リストの更新:間違えたら追加、正解したら除去
     if (isCorrect) {
@@ -859,6 +963,8 @@
     document.getElementById("result-title").textContent =
       mode === "review" ? "復習完了" : "今日の5問 完了";
     document.getElementById("result-stars").classList.add("hidden");
+    document.getElementById("result-rank").classList.add("hidden");
+    document.getElementById("result-exam-detail").classList.add("hidden");
     document.getElementById("result-score").textContent =
       `${total}問中 ${quiz.correct}問正解` +
       (mode === "review" && quiz.mastered > 0 ? ` ・ ${quiz.mastered}問を克服` : "") +
@@ -886,8 +992,96 @@
     show("screen-result");
   }
 
+  // 腕試しのリザルト:評価(ランク)・内訳・次の評価までの距離を表示
+  function finishExam() {
+    const total = quiz.items.length;
+    const maxScore = examMaxScore();
+    const rankDef = examRankFor(quiz.score);
+    const rank = rankDef.rank;
+    let earnedXp = quiz.xp + EXAM_RANK_BONUS[rank];
+
+    // 自己ベスト更新(評価が上、または同評価でスコアが上なら更新)
+    const rankIdx = r => EXAM_RANKS.findIndex(d => d.rank === r); // 小さいほど上位
+    const prev = state.exam.best;
+    const improved = !prev || rankIdx(rank) < rankIdx(prev.rank) ||
+      (rank === prev.rank && quiz.score > prev.score);
+    const bestUpdated = improved && !!prev;
+    if (improved) state.exam.best = { rank, score: quiz.score, date: todayStr() };
+    if (bestUpdated) {
+      earnedXp += EXAM_BEST_BONUS;
+      toast(`自己ベスト更新:${rank}評価 +${EXAM_BEST_BONUS}XP`);
+    }
+
+    state.exam.history.unshift({ rank, score: quiz.score, date: todayStr() });
+    state.exam.history = state.exam.history.slice(0, EXAM_HISTORY_MAX);
+
+    awardBadge("exam_first");
+    if (rankIdx(rank) <= rankIdx("B")) awardBadge("exam_b");
+    if (rankIdx(rank) <= rankIdx("A")) awardBadge("exam_a");
+    if (rank === "S") awardBadge("exam_s");
+
+    const firstStudyToday = state.streak.last !== todayStr();
+    touchStreak();
+    gainXp(earnedXp);
+    checkMissions();
+    checkCollectionBadges();
+    saveState();
+
+    // 画面描画
+    document.getElementById("result-title").textContent = "腕試し 結果";
+    document.getElementById("result-stars").classList.add("hidden");
+    const rankEl = document.getElementById("result-rank");
+    rankEl.classList.remove("hidden");
+    const letter = document.getElementById("result-rank-letter");
+    letter.textContent = rank;
+    letter.className = `result-rank-letter rank-${rank.toLowerCase()}`;
+    document.getElementById("result-rank-label").textContent = rankDef.label;
+    document.getElementById("result-score").textContent =
+      `${maxScore}点満点中 ${quiz.score}点(${total}問中${quiz.correct}問正解)`;
+    renderResultXp(earnedXp);
+    renderStreakResult(firstStudyToday);
+    renderTomorrow(false);
+
+    // 内訳(難易度別の正解数)と、次の評価に向けたヒント
+    document.getElementById("result-exam-detail").classList.remove("hidden");
+    document.getElementById("exam-stage-breakdown").innerHTML =
+      EXAM_STAGE_NAMES.map((name, si) => {
+        const stageTotal = quiz.items.filter(it => it.stageIdx === si).length;
+        return `
+          <div class="exam-stage-row">
+            <span class="exam-stage-name">${name}(1問${EXAM_POINTS[si]}点)</span>
+            <span class="exam-stage-count">${quiz.stageCorrect[si]}/${stageTotal}問正解</span>
+          </div>`;
+      }).join("");
+    let hint;
+    if (rank === "S") {
+      hint = "最高評価です。この実力を維持できるか、また挑戦してみましょう。";
+    } else {
+      const next = EXAM_RANKS[EXAM_RANKS.indexOf(rankDef) - 1];
+      hint = `${next.rank}評価まであと${next.min - quiz.score}点。`;
+      const worst = Object.entries(quiz.catLost).sort((a, b) => b[1] - a[1])[0];
+      if (worst) {
+        const catName = QUIZ_DATA.find(c => c.id === worst[0]).name;
+        hint += `今回は「${catName}」での失点が最多でした。ステージ学習と復習で鍛えて再挑戦しましょう。`;
+      }
+    }
+    document.getElementById("exam-next-hint").textContent = hint;
+    renderRecap();
+
+    const btnRetry = document.getElementById("btn-retry");
+    btnRetry.classList.remove("hidden");
+    btnRetry.textContent = "もう一度挑戦";
+    btnRetry.onclick = () => startExam();
+    const btnContinue = document.getElementById("btn-continue");
+    btnContinue.textContent = "ホームへ";
+    btnContinue.onclick = () => { show("screen-home"); render(); };
+
+    show("screen-result");
+  }
+
   function finishQuiz() {
     closeSheet();
+    if (quiz.mode === "exam") { finishExam(); return; }
     if (quiz.mode !== "stage") { finishLight(quiz.mode); return; }
 
     const total = quiz.items.length;
@@ -925,6 +1119,8 @@
       perfect ? "全問正解" : cleared ? "ステージクリア" : "クリアまであと一歩";
     const starsEl = document.getElementById("result-stars");
     starsEl.classList.remove("hidden");
+    document.getElementById("result-rank").classList.add("hidden");
+    document.getElementById("result-exam-detail").classList.add("hidden");
     starsEl.innerHTML =
       [1, 2, 3].map(i => `<span class="star${i <= stars ? " earned" : ""}">★</span>`).join("");
     document.getElementById("result-score").textContent =
@@ -1173,6 +1369,26 @@
 
     // 分野別正答率
     renderCatRates();
+
+    // 腕試しの記録
+    renderExamHistory();
+  }
+
+  // 腕試しの挑戦履歴(直近)。未挑戦なら非表示
+  function renderExamHistory() {
+    const card = document.getElementById("exam-history-card");
+    const h = state.exam.history;
+    card.classList.toggle("hidden", h.length === 0);
+    if (h.length === 0) return;
+    const best = state.exam.best;
+    document.getElementById("exam-history-best").textContent =
+      best ? `最高評価 ${best.rank}(${best.score}/${examMaxScore()}点)` : "";
+    document.getElementById("exam-history").innerHTML = h.map(e => `
+      <div class="exam-history-item">
+        <span class="exam-history-rank rank-${e.rank.toLowerCase()}">${e.rank}</span>
+        <span class="exam-history-score">${e.score}/${examMaxScore()}点</span>
+        <span class="exam-history-date">${e.date}</span>
+      </div>`).join("");
   }
 
   // ---------- 学習カレンダー(月別) ----------
@@ -1344,6 +1560,7 @@
     if (t) startQuiz(t.catId, t.stageIdx);
   });
   document.getElementById("btn-review").addEventListener("click", () => startReview());
+  document.getElementById("btn-exam").addEventListener("click", () => startExam());
   document.getElementById("btn-review-start").addEventListener("click", () => startReview());
   document.getElementById("btn-stages-back").addEventListener("click", () => {
     renderMap();

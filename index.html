@@ -44,6 +44,15 @@
         <button class="btn btn-secondary btn-review" id="btn-learn">続きから</button>
       </div>
 
+      <div class="card exam-card" id="home-exam-card">
+        <div class="exam-head">
+          <h2 class="card-title">腕試し</h2>
+          <span class="exam-best-pill hidden" id="exam-best-pill"></span>
+        </div>
+        <p class="review-desc" id="exam-desc"></p>
+        <button class="btn btn-secondary btn-review" id="btn-exam">実力を測る</button>
+      </div>
+
       <div class="card missions-card" id="missions-card">
         <div class="missions-summary">
           <span class="card-title">本日の目標</span>
@@ -99,12 +108,21 @@
       <div class="result-body">
         <h1 class="result-title" id="result-title">クリア</h1>
         <div class="result-stars" id="result-stars"></div>
+        <div class="result-rank hidden" id="result-rank">
+          <div class="result-rank-letter" id="result-rank-letter"></div>
+          <div class="result-rank-label" id="result-rank-label"></div>
+        </div>
         <div class="result-score" id="result-score"></div>
         <div class="result-streak hidden" id="result-streak"></div>
         <div class="card result-xp-card">
           <div class="xp-gain" id="result-xp">+0 XP</div>
           <div class="xp-bar"><div class="xp-fill" id="result-xp-fill"></div></div>
           <div class="xp-text" id="result-xp-text"></div>
+        </div>
+        <div class="card result-exam-detail hidden" id="result-exam-detail">
+          <h2 class="card-title">内訳</h2>
+          <div id="exam-stage-breakdown"></div>
+          <p class="exam-next-hint" id="exam-next-hint"></p>
         </div>
         <div class="card result-recap hidden" id="result-recap">
           <h2 class="card-title">ふりかえり</h2>
@@ -196,6 +214,13 @@
         <div class="card">
           <h2 class="card-title">分野別正答率</h2>
           <div id="stats-cats"></div>
+        </div>
+        <div class="card hidden" id="exam-history-card">
+          <div class="exam-history-head">
+            <h2 class="card-title">腕試しの記録</h2>
+            <span class="exam-history-best" id="exam-history-best"></span>
+          </div>
+          <div id="exam-history"></div>
         </div>
       </div>
 
