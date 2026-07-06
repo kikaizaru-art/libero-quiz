@@ -13,6 +13,7 @@
   const REVIEW_SIZE = 5;        // 復習1回あたりの出題数
   const REVIEW_PERFECT_BONUS = 15;
   const DAILY_SIZE = 5;         // 「今日の5問」の出題数
+  const PRACTICE_SIZE = 5;      // 実践問題1回あたりの出題数
   const DAILY_BONUS = 20;       // 「今日の5問」を初回クリアしたときのボーナスXP
   const FREEZE_MAX = 2;         // ストリークフリーズの最大ストック数
   const FREEZE_EVERY = 7;       // 7日連続ごとにフリーズを1個獲得
@@ -419,16 +420,21 @@
 
   function renderToday() {
     ensureDaily();
-    const desc = document.getElementById("today-desc");
-    const btn = document.getElementById("btn-start");
-    const catNames = dailyCatNames();
-    if (state.daily.todayDone) {
-      desc.textContent = `今日の5問はクリア済みです。もう一度挑戦してXPを稼げます(${catNames.join("・")})`;
-      btn.textContent = "もう一度挑戦";
-    } else {
-      desc.textContent = `いろいろな分野から日替わりで5問出題(今日は ${catNames.join("・")})`;
-      btn.textContent = "始める";
+    // 今日の5問クリア後は主CTAカードを小さな完了帯に畳み、
+    // 一語りと学習メニューを画面の上へ繰り上げる
+    const done = state.daily.todayDone;
+    document.getElementById("home-today-card").classList.toggle("hidden", done);
+    document.getElementById("today-done-card").classList.toggle("hidden", !done);
+
+    if (done) {
+      const names = dailyCatNames(dateStr(new Date(Date.now() + 86400000)));
+      document.getElementById("today-done-sub").textContent =
+        `タップでもう一度挑戦 ・ 明日は ${names.join("・")} から出題`;
+      return;
     }
+
+    document.getElementById("today-desc").textContent =
+      `いろいろな分野から日替わりで5問出題(今日は ${dailyCatNames().join("・")})`;
 
     // 連続記録のフック:今日まだ学習していなければ「つなぐ」動機を見せる
     const hook = document.getElementById("today-hook");
@@ -467,37 +473,53 @@
     document.getElementById("week-strip").innerHTML = html;
   }
 
-  // 「学習を進める」カード(ステージ学習の続き)
-  function renderLearnCard() {
-    const t = pickLearnTarget();
-    const card = document.getElementById("home-learn-card");
-    card.classList.toggle("hidden", !t);
-    if (!t) return;
-    const cat = QUIZ_DATA.find(c => c.id === t.catId);
-    const stage = cat.stages[t.stageIdx];
-    document.getElementById("learn-desc").textContent =
-      `${cat.name} ステージ${t.stageIdx + 1}(${stage.name})${t.resumed ? "の続きから" : "に挑戦"}`;
-    document.getElementById("btn-learn").textContent = t.resumed ? "続きから" : "始める";
-  }
+  // 「学習メニュー」カード:次の行動(復習・続きのステージ・実践・実力判定)を1枚のリストに集約
+  // 並びは優先度順。説明文は持たせず「ラベル+補足+シェブロン」の行で統一する
+  function renderContinueCard() {
+    const rows = [];
 
-  // 実力判定テストカード:最高評価を常時表示して更新意欲につなげる
-  function renderExamCard() {
-    const best = state.exam.best;
-    const pill = document.getElementById("exam-best-pill");
-    const desc = document.getElementById("exam-desc");
-    const btn = document.getElementById("btn-exam");
-    if (!best) {
-      pill.classList.add("hidden");
-      desc.textContent = "全分野からランダムに15問を出題して実力を評価します。後半ほど難しくなります。";
-      btn.textContent = "実力を測る";
-      return;
+    const reviewCount = Object.keys(state.wrong).length;
+    if (reviewCount > 0) {
+      rows.push({ label: "復習", sub: `${reviewCount}問待ち`, accent: true, onTap: startReview });
     }
-    pill.textContent = `最高評価 ${best.rank}`;
-    pill.className = `exam-best-pill rank-${best.rank.toLowerCase()}`;
-    desc.textContent = best.rank === "S"
-      ? "最高評価Sを獲得済みです。全問正解の実力を維持できるか試しましょう。"
-      : `最高評価は${best.rank}(${best.score}/${examMaxScore()}点)。学習を進めて評価の更新を目指しましょう。`;
-    btn.textContent = "再挑戦する";
+
+    const t = pickLearnTarget();
+    if (t) {
+      const cat = QUIZ_DATA.find(c => c.id === t.catId);
+      rows.push({
+        label: `${cat.name} ${cat.stages[t.stageIdx].name}`,
+        sub: t.resumed ? "続きから" : "次のステージ",
+        onTap: () => startQuiz(t.catId, t.stageIdx),
+      });
+    }
+
+    const practiceCount = unlockedScenarios().length;
+    if (practiceCount > 0) {
+      rows.push({
+        label: "実践問題",
+        sub: `${Math.min(practiceCount, PRACTICE_SIZE)}問に挑戦`,
+        onTap: startPractice,
+      });
+    }
+
+    rows.push({
+      label: "実力判定テスト",
+      sub: state.exam.best ? `最高評価 ${state.exam.best.rank}` : "未挑戦",
+      onTap: startExam,
+    });
+
+    const list = document.getElementById("continue-list");
+    list.innerHTML = "";
+    for (const r of rows) {
+      const btn = document.createElement("button");
+      btn.className = "continue-item";
+      btn.innerHTML = `
+        <span class="continue-label">${r.label}</span>
+        <span class="continue-sub${r.accent ? " accent" : ""}">${r.sub}</span>
+        <span class="library-item-chev" aria-hidden="true">›</span>`;
+      btn.addEventListener("click", r.onTap);
+      list.appendChild(btn);
+    }
   }
 
   function renderHome() {
@@ -515,12 +537,13 @@
 
     renderWeekStrip();
     renderToday();
-    renderLearnCard();
-    renderExamCard();
+    renderContinueCard();
 
-    // 本日の目標
+    // 本日の目標(1行サマリー+タップ展開)
     const doneCount = MISSIONS.filter(m => state.daily.claimed.includes(m.id)).length;
     document.getElementById("missions-count").textContent = `${doneCount}/${MISSIONS.length} 達成`;
+    document.getElementById("missions-dots").innerHTML =
+      MISSIONS.map(m => `<i class="m-dot${state.daily.claimed.includes(m.id) ? " done" : ""}"></i>`).join("");
 
     const missionList = document.getElementById("mission-list");
     missionList.innerHTML = "";
@@ -538,17 +561,39 @@
       missionList.appendChild(el);
     }
 
-    // 復習カード(待ちがあるときだけ表示)
-    const reviewCount = Object.keys(state.wrong).length;
-    const card = document.getElementById("home-review-card");
-    card.classList.toggle("hidden", reviewCount === 0);
-    if (reviewCount > 0) {
-      document.getElementById("review-desc").textContent =
-        `間違えた問題が ${reviewCount}問 あります。正解すればリストから消えます。`;
-      document.getElementById("btn-review").textContent =
-        `復習する(${Math.min(reviewCount, REVIEW_SIZE)}問)`;
-    }
+    renderTalkCard();
   }
+
+  // ---------- 「今日の一語り」(解放済みカードの日替わり再提示) ----------
+
+  // 使いどころ付きで解放済みのカードから、日付で決まる1件を選ぶ
+  function talkPick() {
+    const pool = [];
+    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+      stage.questions.forEach((q, qi) => {
+        if (state.seen[`${cat.id}:${si}:${qi}`] && q.lib.use) pool.push({ cat, q });
+      })
+    ));
+    if (pool.length === 0) return null;
+    const rnd = seededRandom(`talk-${todayStr()}`);
+    return pool[Math.floor(rnd() * pool.length)];
+  }
+
+  function renderTalkCard() {
+    const card = document.getElementById("home-talk-card");
+    const pick = talkPick();
+    card.classList.toggle("hidden", !pick);
+    if (!pick) return;
+    document.getElementById("talk-title").innerHTML =
+      `<span class="library-item-cat" style="background:${pick.cat.color}">${pick.cat.name}</span>${pick.q.lib.title}`;
+    document.getElementById("talk-use").textContent = pick.q.lib.use;
+  }
+
+  // カード全体がタップ領域(ライブラリ詳細を開く)
+  document.getElementById("home-talk-card").addEventListener("click", () => {
+    const pick = talkPick();
+    if (pick) openLibEntry(pick.cat, pick.q);
+  });
 
   // ---------- 学習(分野一覧)描画 ----------
 
@@ -617,8 +662,8 @@
 
   // ---------- クイズ本体 ----------
 
-  // mode: "stage"(通常) | "review"(復習) | "daily"(今日の5問) | "exam"(実力判定テスト)
-  // items: [{ catId, stageIdx, qIdx }]
+  // mode: "stage"(通常) | "review"(復習) | "daily"(今日の5問) | "exam"(実力判定テスト) | "practice"(実践問題)
+  // items: [{ catId, stageIdx, qIdx }] または実践問題の [{ scenarioIdx }]
   let quiz = null; // { mode, catId, stageIdx, items, index, correct, combo, maxCombo, xp, mastered, wrongList, score, stageCorrect, catLost }
 
   function shuffle(arr) {
@@ -717,8 +762,30 @@
   }
 
   function questionAt(item) {
+    if (item.scenarioIdx !== undefined) return SCENARIO_DATA[item.scenarioIdx];
     const cat = QUIZ_DATA.find(c => c.id === item.catId);
     return cat.stages[item.stageIdx].questions[item.qIdx];
+  }
+
+  // ---------- 実践問題(シナリオ問題) ----------
+
+  // 対応する知識カードを解放済みの実践問題だけが挑戦できる
+  function unlockedScenarios() {
+    return SCENARIO_DATA
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => {
+        const e = TITLE_INDEX[s.libTitle];
+        return e && state.seen[e.key];
+      });
+  }
+
+  function startPractice() {
+    const pool = unlockedScenarios();
+    if (pool.length === 0) return;
+    const items = shuffle(pool).slice(0, PRACTICE_SIZE).map(({ i }) => ({ scenarioIdx: i }));
+    quiz = newQuiz("practice", null, null, items);
+    show("screen-quiz");
+    renderQuestion();
   }
 
   function currentQuestion() {
@@ -732,8 +799,8 @@
 
   function renderQuestion() {
     const item = quiz.items[quiz.index];
-    const cat = QUIZ_DATA.find(c => c.id === item.catId);
     const q = currentQuestion();
+    const cat = QUIZ_DATA.find(c => c.id === (item.scenarioIdx !== undefined ? q.catId : item.catId));
     const total = quiz.items.length;
 
     closeSheet();
@@ -743,6 +810,7 @@
     const metaPrefix = quiz.mode === "review" ? `復習(${cat.name})`
       : quiz.mode === "daily" ? `今日の5問(${cat.name})`
       : quiz.mode === "exam" ? `実力判定テスト ${cat.stages[item.stageIdx].name}(${cat.name})`
+      : quiz.mode === "practice" ? `実践問題(${cat.name})`
       : `${cat.name} ${cat.stages[item.stageIdx].name}`;
     document.getElementById("quiz-meta").textContent =
       `${metaPrefix} ・ 第${quiz.index + 1}問 / 全${total}問`;
@@ -760,20 +828,37 @@
     choicesEl.innerHTML = "";
     // 選択肢の並びも毎回シャッフル
     const order = shuffle(q.choices.map((_, i) => i));
-    order.forEach(choiceIdx => {
-      const btn = document.createElement("button");
-      btn.className = "choice";
-      btn.dataset.index = choiceIdx;
-      btn.textContent = q.choices[choiceIdx];
-      btn.addEventListener("click", () => answer(choiceIdx, btn));
-      choicesEl.appendChild(btn);
-    });
+    const buildChoices = () => {
+      choicesEl.innerHTML = "";
+      order.forEach(choiceIdx => {
+        const btn = document.createElement("button");
+        btn.className = "choice";
+        btn.dataset.index = choiceIdx;
+        btn.textContent = q.choices[choiceIdx];
+        btn.addEventListener("click", () => answer(choiceIdx, btn));
+        choicesEl.appendChild(btn);
+      });
+    };
+    if (quiz.mode === "review") {
+      // 想起チェック:選択肢を見る前に自力で思い出す1クッション(テスト効果)
+      const cover = document.createElement("button");
+      cover.className = "recall-cover";
+      cover.innerHTML = `
+        <span class="recall-cover-title">まず、頭の中で答えてみましょう</span>
+        <span class="recall-cover-sub">思い出せたらタップして選択肢を表示</span>`;
+      cover.addEventListener("click", buildChoices);
+      choicesEl.appendChild(cover);
+    } else {
+      buildChoices();
+    }
   }
 
   function answer(choiceIdx, clickedBtn) {
     const q = currentQuestion();
     const item = quiz.items[quiz.index];
-    const wrongKey = `${item.catId}:${item.stageIdx}:${item.qIdx}`;
+    // 実践問題は進捗キー(catId:stageIdx:qIdx)を持たないため、seen・復習リスト・分野別成績には触れない
+    const isScenario = item.scenarioIdx !== undefined;
+    const wrongKey = isScenario ? null : `${item.catId}:${item.stageIdx}:${item.qIdx}`;
     const isCorrect = choiceIdx === q.answer;
     const buttons = document.querySelectorAll("#choices .choice");
     buttons.forEach(b => {
@@ -783,12 +868,14 @@
     });
 
     state.totals.answered++;
-    state.seen[wrongKey] = true; // 出会った問題はライブラリに解放
+    if (!isScenario) {
+      state.seen[wrongKey] = true; // 出会った問題はライブラリに解放
 
-    // 分野別成績・日別解答数(記録画面用)
-    const cs = state.catStats[item.catId] || (state.catStats[item.catId] = { answered: 0, correct: 0 });
-    cs.answered++;
-    if (isCorrect) cs.correct++;
+      // 分野別成績(記録画面用)
+      const cs = state.catStats[item.catId] || (state.catStats[item.catId] = { answered: 0, correct: 0 });
+      cs.answered++;
+      if (isCorrect) cs.correct++;
+    }
     const today = todayStr();
     state.activity[today] = (state.activity[today] || 0) + 1;
 
@@ -803,9 +890,9 @@
       }
     }
 
-    // 復習リストの更新:間違えたら追加、正解したら除去
+    // 復習リストの更新:間違えたら追加、正解したら除去(実践問題は対象外)
     if (isCorrect) {
-      if (state.wrong[wrongKey]) {
+      if (!isScenario && state.wrong[wrongKey]) {
         delete state.wrong[wrongKey];
         if (quiz.mode === "review") {
           quiz.mastered++;
@@ -813,10 +900,12 @@
         }
       }
     } else {
-      const entry = state.wrong[wrongKey] || { count: 0, last: null };
-      entry.count++;
-      entry.last = today;
-      state.wrong[wrongKey] = entry;
+      if (!isScenario) {
+        const entry = state.wrong[wrongKey] || { count: 0, last: null };
+        entry.count++;
+        entry.last = today;
+        state.wrong[wrongKey] = entry;
+      }
       quiz.wrongList.push({ q: q.q, correct: q.choices[q.answer] });
     }
 
@@ -844,11 +933,22 @@
     verdict.className = `explanation-verdict ${isCorrect ? "good" : "bad"}`;
     document.getElementById("explanation-text").textContent = q.exp;
 
+    // 使いどころ(この知識が活きる場面。データがある問題のみ表示)
+    const useWrap = document.getElementById("explanation-use");
+    if (q.lib && q.lib.use) {
+      document.getElementById("explanation-use-text").textContent = q.lib.use;
+      useWrap.classList.remove("hidden");
+    } else {
+      useWrap.classList.add("hidden");
+    }
+
     // 「もっと知る」コラム(タップで展開。ライブラリにも収録)
+    // 実践問題では元になった知識カード(libTitle)のコラムを出し、知識との紐づきを示す
+    const lib = q.lib || (q.libTitle && TITLE_INDEX[q.libTitle] ? TITLE_INDEX[q.libTitle].q.lib : null);
     const moreWrap = document.getElementById("explanation-more");
-    if (q.lib && q.lib.more) {
-      document.getElementById("btn-more").textContent = `もっと知る:${q.lib.title}`;
-      document.getElementById("explanation-more-text").textContent = q.lib.more;
+    if (lib && lib.more) {
+      document.getElementById("btn-more").textContent = `もっと知る:${lib.title}`;
+      document.getElementById("explanation-more-text").textContent = lib.more;
       setMoreOpen(false);
       moreWrap.classList.remove("hidden");
     } else {
@@ -936,6 +1036,8 @@
       </div>`).join("");
     document.getElementById("recap-note").textContent = quiz.mode === "review"
       ? "この問題は復習リストに残っています。復習タブからいつでも再挑戦できます。"
+      : quiz.mode === "practice"
+      ? "実践問題は復習リストには入りません。関連する知識カードをライブラリで見返しておきましょう。"
       : "間違えた問題は復習リストに追加しました。復習タブからいつでも挑戦できます。";
   }
 
@@ -965,7 +1067,7 @@
     saveState();
 
     document.getElementById("result-title").textContent =
-      mode === "review" ? "復習完了" : "今日の5問 完了";
+      mode === "review" ? "復習完了" : mode === "practice" ? "実践問題 完了" : "今日の5問 完了";
     document.getElementById("result-stars").classList.add("hidden");
     document.getElementById("result-rank").classList.add("hidden");
     document.getElementById("result-exam-detail").classList.add("hidden");
@@ -984,6 +1086,10 @@
       btnRetry.classList.toggle("hidden", remaining === 0);
       btnRetry.textContent = "続けて復習";
       btnRetry.onclick = () => startReview();
+    } else if (mode === "practice") {
+      btnRetry.classList.remove("hidden");
+      btnRetry.textContent = "もう一度挑戦";
+      btnRetry.onclick = () => startPractice();
     } else {
       btnRetry.classList.remove("hidden");
       btnRetry.textContent = "もう一度挑戦";
@@ -1213,7 +1319,22 @@
 
   // ---------- ライブラリ ----------
 
+  // 使う場面タグ(lib.scenes)の定義。目的起点でカードを逆引きするフィルタに使う
+  const LIB_SCENES = [
+    { id: "talk",  name: "会話で使う" },
+    { id: "idea",  name: "発想に使う" },
+    { id: "art",   name: "鑑賞が深まる" },
+    { id: "quote", name: "引用できる" },
+  ];
+
+  // lib.title から問題を引く索引(related の解決用。title はデータ全体で一意)
+  const TITLE_INDEX = {};
+  QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+    stage.questions.forEach((q, qi) => { TITLE_INDEX[q.lib.title] = { cat, q, key: `${cat.id}:${si}:${qi}` }; })
+  ));
+
   let libSelected = QUIZ_DATA[0].id; // 表示中の分野タブ
+  let libScene = "all";              // 表示中の場面フィルタ
 
   // 分野内の各問題の解放状況を集計する
   function libRowsFor(cat) {
@@ -1253,6 +1374,29 @@
     document.getElementById("library-sub").textContent =
       `集めた知識カード ${found} / ${total}`;
 
+    // 場面フィルタピル(「明日は会食」など目的からカードを逆引きする導線)
+    const scenesEl = document.getElementById("library-scenes");
+    scenesEl.innerHTML = "";
+    for (const sc of [{ id: "all", name: "すべて" }, ...LIB_SCENES]) {
+      const btn = document.createElement("button");
+      btn.className = `scene-pill${sc.id === libScene ? " active" : ""}`;
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", String(sc.id === libScene));
+      btn.textContent = sc.name;
+      btn.addEventListener("click", () => {
+        libScene = sc.id;
+        renderLibrary();
+      });
+      scenesEl.appendChild(btn);
+    }
+
+    // 場面で絞り込み中は分野タブを隠し、全分野横断の一覧を出す
+    tabsEl.classList.toggle("hidden", libScene !== "all");
+    if (libScene !== "all") {
+      renderSceneList();
+      return;
+    }
+
     // 選択中の分野のみ表示
     const cat = QUIZ_DATA.find(c => c.id === libSelected) || QUIZ_DATA[0];
     const rows = libRowsFor(cat);
@@ -1289,6 +1433,44 @@
     list.appendChild(card);
   }
 
+  // 場面で絞り込んだ一覧(全分野横断・解放済みカードのみ)
+  function renderSceneList() {
+    const list = document.getElementById("library-list");
+    list.innerHTML = "";
+    const hits = [];
+    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+      stage.questions.forEach((q, qi) => {
+        if (state.seen[`${cat.id}:${si}:${qi}`] && q.lib.scenes && q.lib.scenes.includes(libScene)) {
+          hits.push({ cat, q });
+        }
+      })
+    ));
+    const card = document.createElement("div");
+    card.className = "card library-cat";
+    card.innerHTML = `
+      <div class="library-cat-head">
+        <span class="library-cat-name">${LIB_SCENES.find(s => s.id === libScene).name}</span>
+        <span class="library-cat-count">${hits.length}件</span>
+      </div>`;
+    if (hits.length === 0) {
+      const p = document.createElement("p");
+      p.className = "library-empty";
+      p.textContent = "この場面で使えるカードはまだありません。クイズで知識カードを集めましょう。";
+      card.appendChild(p);
+    }
+    for (const h of hits) {
+      const btn = document.createElement("button");
+      btn.className = "library-item";
+      btn.innerHTML = `
+        <span class="library-item-cat" style="background:${h.cat.color}">${h.cat.name}</span>
+        <span class="library-item-title">${h.q.lib.title}</span>
+        <span class="library-item-chev" aria-hidden="true">›</span>`;
+      btn.addEventListener("click", () => openLibEntry(h.cat, h.q));
+      card.appendChild(btn);
+    }
+    list.appendChild(card);
+  }
+
   // ライブラリ詳細(問題・正解・解説・関連リンク)
   const libOverlay = document.getElementById("lib-overlay");
 
@@ -1301,6 +1483,30 @@
     document.getElementById("lib-answer").textContent = q.choices[q.answer];
     document.getElementById("lib-exp").textContent = q.exp;
     document.getElementById("lib-more").textContent = q.lib.more;
+    const hasUse = !!q.lib.use;
+    document.getElementById("lib-use-label").classList.toggle("hidden", !hasUse);
+    const useEl = document.getElementById("lib-use");
+    useEl.classList.toggle("hidden", !hasUse);
+    useEl.textContent = q.lib.use || "";
+
+    // 関連項目(分野横断の「あわせて語ると深い」。解放済みのカードだけリンクを出す)
+    const relList = document.getElementById("lib-related-list");
+    relList.innerHTML = "";
+    const rels = (q.lib.related || [])
+      .map(t => TITLE_INDEX[t])
+      .filter(e => e && state.seen[e.key]);
+    document.getElementById("lib-related").classList.toggle("hidden", rels.length === 0);
+    for (const e of rels) {
+      const btn = document.createElement("button");
+      btn.className = "lib-related-item";
+      btn.innerHTML = `
+        <span class="library-item-cat" style="background:${e.cat.color}">${e.cat.name}</span>
+        <span>${e.q.lib.title}</span>`;
+      btn.addEventListener("click", () => openLibEntry(e.cat, e.q));
+      relList.appendChild(btn);
+    }
+
+    document.querySelector(".lib-box").scrollTop = 0; // 関連リンクで移動したとき先頭から読めるように
     libOverlay.classList.remove("hidden");
   }
 
@@ -1558,13 +1764,16 @@
 
   // ---------- 共通イベント ----------
 
-  document.getElementById("btn-start").addEventListener("click", () => startDaily());
-  document.getElementById("btn-learn").addEventListener("click", () => {
-    const t = pickLearnTarget();
-    if (t) startQuiz(t.catId, t.stageIdx);
+  // 本日の目標の開閉(展開状態はセッション内のみ保持)
+  document.getElementById("missions-toggle").addEventListener("click", () => {
+    const toggle = document.getElementById("missions-toggle");
+    const open = toggle.getAttribute("aria-expanded") !== "true";
+    toggle.setAttribute("aria-expanded", String(open));
+    document.getElementById("mission-list").classList.toggle("hidden", !open);
   });
-  document.getElementById("btn-review").addEventListener("click", () => startReview());
-  document.getElementById("btn-exam").addEventListener("click", () => startExam());
+
+  document.getElementById("btn-start").addEventListener("click", () => startDaily());
+  document.getElementById("today-done-card").addEventListener("click", () => startDaily());
   document.getElementById("btn-review-start").addEventListener("click", () => startReview());
   document.getElementById("btn-stages-back").addEventListener("click", () => {
     renderMap();

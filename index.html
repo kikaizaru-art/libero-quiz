@@ -15,6 +15,7 @@
 
     <!-- ホーム画面 -->
     <section id="screen-home" class="screen active">
+      <div class="card status-band">
       <header class="player-header">
         <div class="player-info">
           <div class="player-row">
@@ -31,41 +32,45 @@
 
       <div class="week-strip" id="week-strip" aria-label="今週の学習"></div>
 
-      <div class="card today-card">
+      <button class="missions-summary" id="missions-toggle" aria-expanded="false" aria-controls="mission-list">
+        <span class="card-title">本日の目標</span>
+        <span class="missions-dots" id="missions-dots" aria-hidden="true"></span>
+        <span class="missions-count" id="missions-count"></span>
+        <span class="missions-chev" aria-hidden="true">▾</span>
+      </button>
+      <div id="mission-list" class="hidden"></div>
+      </div>
+
+      <div class="card today-card" id="home-today-card">
         <div class="today-label">今日の5問</div>
         <p class="today-desc" id="today-desc"></p>
         <p class="today-hook hidden" id="today-hook"></p>
         <button class="btn btn-primary btn-big" id="btn-start">始める</button>
       </div>
 
-      <div class="card learn-card hidden" id="home-learn-card">
-        <h2 class="card-title">学習を進める</h2>
-        <p class="review-desc" id="learn-desc"></p>
-        <button class="btn btn-secondary btn-review" id="btn-learn">続きから</button>
-      </div>
+      <button class="card today-done-card hidden" id="today-done-card">
+        <span class="today-done-check" aria-hidden="true">✓</span>
+        <span class="today-done-text">
+          <span class="today-done-title">今日の5問 クリア済み</span>
+          <span class="today-done-sub" id="today-done-sub"></span>
+        </span>
+        <span class="talk-chev" aria-hidden="true">›</span>
+      </button>
 
-      <div class="card exam-card" id="home-exam-card">
-        <div class="exam-head">
-          <h2 class="card-title">実力判定テスト</h2>
-          <span class="exam-best-pill hidden" id="exam-best-pill"></span>
+      <button class="card talk-card hidden" id="home-talk-card">
+        <div class="talk-head">
+          <span class="card-title">今日の一語り</span>
+          <span class="talk-chev" aria-hidden="true">›</span>
         </div>
-        <p class="review-desc" id="exam-desc"></p>
-        <button class="btn btn-secondary btn-review" id="btn-exam">実力を測る</button>
+        <div class="talk-title" id="talk-title"></div>
+        <p class="talk-preview" id="talk-use"></p>
+      </button>
+
+      <div class="card continue-card" id="home-continue-card">
+        <h2 class="card-title">学習メニュー</h2>
+        <div id="continue-list"></div>
       </div>
 
-      <div class="card missions-card" id="missions-card">
-        <div class="missions-summary">
-          <span class="card-title">本日の目標</span>
-          <span class="missions-count" id="missions-count"></span>
-        </div>
-        <div id="mission-list"></div>
-      </div>
-
-      <div class="card review-card hidden" id="home-review-card">
-        <h2 class="card-title">復習</h2>
-        <p class="review-desc" id="review-desc"></p>
-        <button class="btn btn-secondary btn-review" id="btn-review">復習する</button>
-      </div>
     </section>
 
     <!-- 学習(分野一覧)画面 -->
@@ -163,7 +168,8 @@
         <h1>ライブラリ</h1>
         <p id="library-sub"></p>
       </header>
-      <p class="library-note">クイズで出会った問題が知識カードとして集まります。カードを開くと、解説と「もっと知る」コラムをいつでも見返せます。</p>
+      <p class="library-note">クイズで出会った問題が、会話や仕事で語れる知識カードとして集まります。カードを開くと、解説・「もっと知る」コラム・使いどころをいつでも見返せます。</p>
+      <div class="library-scenes" id="library-scenes" role="tablist" aria-label="使う場面で絞り込み"></div>
       <div class="library-tabs" id="library-tabs" role="tablist" aria-label="分野の切り替え"></div>
       <div id="library-list"></div>
     </section>
@@ -279,6 +285,10 @@
     <div class="explanation-sheet" id="explanation" role="region" aria-label="解説">
       <div class="explanation-verdict" id="explanation-verdict"></div>
       <p id="explanation-text"></p>
+      <div class="explanation-use hidden" id="explanation-use">
+        <div class="use-label">使いどころ</div>
+        <p class="explanation-use-text" id="explanation-use-text"></p>
+      </div>
       <div class="explanation-more hidden" id="explanation-more">
         <button class="explanation-more-btn" id="btn-more" aria-expanded="false"></button>
         <p class="explanation-more-text hidden" id="explanation-more-text"></p>
@@ -323,6 +333,12 @@
         <p class="lib-exp" id="lib-exp"></p>
         <div class="lib-more-label">もっと知る</div>
         <p class="lib-more" id="lib-more"></p>
+        <div class="lib-use-label use-label hidden" id="lib-use-label">使いどころ</div>
+        <p class="lib-use hidden" id="lib-use"></p>
+        <div class="lib-related hidden" id="lib-related">
+          <div class="lib-related-label">あわせて語ると深い</div>
+          <div id="lib-related-list"></div>
+        </div>
         <button class="btn btn-secondary" id="btn-lib-close">閉じる</button>
       </div>
     </div>
