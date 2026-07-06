@@ -548,7 +548,39 @@
       document.getElementById("btn-review").textContent =
         `復習する(${Math.min(reviewCount, REVIEW_SIZE)}問)`;
     }
+
+    renderTalkCard();
   }
+
+  // ---------- 「今日の一語り」(解放済みカードの日替わり再提示) ----------
+
+  // 使いどころ付きで解放済みのカードから、日付で決まる1件を選ぶ
+  function talkPick() {
+    const pool = [];
+    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+      stage.questions.forEach((q, qi) => {
+        if (state.seen[`${cat.id}:${si}:${qi}`] && q.lib.use) pool.push({ cat, q });
+      })
+    ));
+    if (pool.length === 0) return null;
+    const rnd = seededRandom(`talk-${todayStr()}`);
+    return pool[Math.floor(rnd() * pool.length)];
+  }
+
+  function renderTalkCard() {
+    const card = document.getElementById("home-talk-card");
+    const pick = talkPick();
+    card.classList.toggle("hidden", !pick);
+    if (!pick) return;
+    document.getElementById("talk-title").innerHTML =
+      `<span class="library-item-cat" style="background:${pick.cat.color}">${pick.cat.name}</span>${pick.q.lib.title}`;
+    document.getElementById("talk-use").textContent = pick.q.lib.use;
+  }
+
+  document.getElementById("btn-talk").addEventListener("click", () => {
+    const pick = talkPick();
+    if (pick) openLibEntry(pick.cat, pick.q);
+  });
 
   // ---------- 学習(分野一覧)描画 ----------
 
@@ -1222,7 +1254,22 @@
 
   // ---------- ライブラリ ----------
 
+  // 使う場面タグ(lib.scenes)の定義。目的起点でカードを逆引きするフィルタに使う
+  const LIB_SCENES = [
+    { id: "talk",  name: "会話で使う" },
+    { id: "idea",  name: "発想に使う" },
+    { id: "art",   name: "鑑賞が深まる" },
+    { id: "quote", name: "引用できる" },
+  ];
+
+  // lib.title から問題を引く索引(related の解決用。title はデータ全体で一意)
+  const TITLE_INDEX = {};
+  QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+    stage.questions.forEach((q, qi) => { TITLE_INDEX[q.lib.title] = { cat, q, key: `${cat.id}:${si}:${qi}` }; })
+  ));
+
   let libSelected = QUIZ_DATA[0].id; // 表示中の分野タブ
+  let libScene = "all";              // 表示中の場面フィルタ
 
   // 分野内の各問題の解放状況を集計する
   function libRowsFor(cat) {
@@ -1262,6 +1309,29 @@
     document.getElementById("library-sub").textContent =
       `集めた知識カード ${found} / ${total}`;
 
+    // 場面フィルタピル(「明日は会食」など目的からカードを逆引きする導線)
+    const scenesEl = document.getElementById("library-scenes");
+    scenesEl.innerHTML = "";
+    for (const sc of [{ id: "all", name: "すべて" }, ...LIB_SCENES]) {
+      const btn = document.createElement("button");
+      btn.className = `scene-pill${sc.id === libScene ? " active" : ""}`;
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", String(sc.id === libScene));
+      btn.textContent = sc.name;
+      btn.addEventListener("click", () => {
+        libScene = sc.id;
+        renderLibrary();
+      });
+      scenesEl.appendChild(btn);
+    }
+
+    // 場面で絞り込み中は分野タブを隠し、全分野横断の一覧を出す
+    tabsEl.classList.toggle("hidden", libScene !== "all");
+    if (libScene !== "all") {
+      renderSceneList();
+      return;
+    }
+
     // 選択中の分野のみ表示
     const cat = QUIZ_DATA.find(c => c.id === libSelected) || QUIZ_DATA[0];
     const rows = libRowsFor(cat);
@@ -1298,6 +1368,44 @@
     list.appendChild(card);
   }
 
+  // 場面で絞り込んだ一覧(全分野横断・解放済みカードのみ)
+  function renderSceneList() {
+    const list = document.getElementById("library-list");
+    list.innerHTML = "";
+    const hits = [];
+    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+      stage.questions.forEach((q, qi) => {
+        if (state.seen[`${cat.id}:${si}:${qi}`] && q.lib.scenes && q.lib.scenes.includes(libScene)) {
+          hits.push({ cat, q });
+        }
+      })
+    ));
+    const card = document.createElement("div");
+    card.className = "card library-cat";
+    card.innerHTML = `
+      <div class="library-cat-head">
+        <span class="library-cat-name">${LIB_SCENES.find(s => s.id === libScene).name}</span>
+        <span class="library-cat-count">${hits.length}件</span>
+      </div>`;
+    if (hits.length === 0) {
+      const p = document.createElement("p");
+      p.className = "library-empty";
+      p.textContent = "この場面で使えるカードはまだありません。クイズで知識カードを集めましょう。";
+      card.appendChild(p);
+    }
+    for (const h of hits) {
+      const btn = document.createElement("button");
+      btn.className = "library-item";
+      btn.innerHTML = `
+        <span class="library-item-cat" style="background:${h.cat.color}">${h.cat.name}</span>
+        <span class="library-item-title">${h.q.lib.title}</span>
+        <span class="library-item-chev" aria-hidden="true">›</span>`;
+      btn.addEventListener("click", () => openLibEntry(h.cat, h.q));
+      card.appendChild(btn);
+    }
+    list.appendChild(card);
+  }
+
   // ライブラリ詳細(問題・正解・解説・関連リンク)
   const libOverlay = document.getElementById("lib-overlay");
 
@@ -1315,6 +1423,25 @@
     const useEl = document.getElementById("lib-use");
     useEl.classList.toggle("hidden", !hasUse);
     useEl.textContent = q.lib.use || "";
+
+    // 関連項目(分野横断の「あわせて語ると深い」。解放済みのカードだけリンクを出す)
+    const relList = document.getElementById("lib-related-list");
+    relList.innerHTML = "";
+    const rels = (q.lib.related || [])
+      .map(t => TITLE_INDEX[t])
+      .filter(e => e && state.seen[e.key]);
+    document.getElementById("lib-related").classList.toggle("hidden", rels.length === 0);
+    for (const e of rels) {
+      const btn = document.createElement("button");
+      btn.className = "lib-related-item";
+      btn.innerHTML = `
+        <span class="library-item-cat" style="background:${e.cat.color}">${e.cat.name}</span>
+        <span>${e.q.lib.title}</span>`;
+      btn.addEventListener("click", () => openLibEntry(e.cat, e.q));
+      relList.appendChild(btn);
+    }
+
+    document.querySelector(".lib-box").scrollTop = 0; // 関連リンクで移動したとき先頭から読めるように
     libOverlay.classList.remove("hidden");
   }
 
