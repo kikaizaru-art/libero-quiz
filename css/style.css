@@ -26,6 +26,9 @@
   --q-bg: rgba(255, 255, 255, 0.97);
   --q-text: #0f172a;
   --shadow: rgba(0, 0, 0, 0.35);
+  --art-ink: #e8edf6;
+  --art-soft: #8fa0b8;
+  --art-paper: #334155;
   --radius: 12px;
   --nav-height: 64px;
 }
@@ -54,6 +57,9 @@
     --q-bg: #ffffff;
     --q-text: #0f172a;
     --shadow: rgba(15, 23, 42, 0.14);
+    --art-ink: #334155;
+    --art-soft: #94a3b8;
+    --art-paper: #ffffff;
   }
 }
 
@@ -81,6 +87,9 @@
   --q-bg: rgba(255, 255, 255, 0.97);
   --q-text: #0f172a;
   --shadow: rgba(0, 0, 0, 0.35);
+  --art-ink: #e8edf6;
+  --art-soft: #8fa0b8;
+  --art-paper: #334155;
 }
 
 :root[data-theme="light"] {
@@ -106,6 +115,9 @@
   --q-bg: #ffffff;
   --q-text: #0f172a;
   --shadow: rgba(15, 23, 42, 0.14);
+  --art-ink: #334155;
+  --art-soft: #94a3b8;
+  --art-paper: #ffffff;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -566,17 +578,15 @@ button:focus-visible {
   color: var(--accent);
   letter-spacing: 0.04em;
 }
-.explanation-use {
-  margin-top: 12px;
+.explanation-use { margin-top: 12px; }
+.explanation-use-text {
+  font-size: 13px; line-height: 1.75;
+  color: var(--text);
   background: var(--pill);
   border-left: 3px solid var(--accent);
   border-radius: 12px;
   padding: 10px 14px 12px;
-}
-.explanation-use-text {
-  font-size: 13px; line-height: 1.75;
-  color: var(--text);
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 /* ライブラリ詳細モーダル */
@@ -637,6 +647,29 @@ button:focus-visible {
 }
 .lib-related-item:active { background: var(--btn2); }
 .lib-box .btn { width: 100%; margin-top: 18px; font-size: 14px; padding: 12px; }
+
+/* 知識カードのイラスト(js/art.js)。分野色は --art-accent で受け取る */
+.knowledge-art {
+  border-radius: 12px;
+  background: var(--pill);
+  background: color-mix(in srgb, var(--art-accent, var(--accent)) 12%, transparent);
+  padding: 8px 12px;
+}
+.knowledge-art svg { display: block; width: 100%; height: auto; }
+/* 解説シートでは本文の横に小さく添える(シートを縦に伸ばさない) */
+.explanation-body { display: flex; align-items: flex-start; gap: 10px; }
+.explanation-body p { flex: 1; }
+.explanation-art { flex: none; width: 104px; margin-top: 2px; padding: 5px 7px; }
+.lib-art { margin: 12px auto 0; max-width: 250px; }
+.library-item-art {
+  flex: none;
+  width: 48px;
+  border-radius: 8px;
+  background: var(--pill);
+  background: color-mix(in srgb, var(--art-accent, var(--accent)) 12%, transparent);
+  overflow: hidden;
+}
+.library-item-art svg { display: block; width: 100%; height: auto; }
 
 /* 「つづける」カード(次の行動のリスト) */
 .continue-card { padding: 14px 16px; }
