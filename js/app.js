@@ -343,22 +343,24 @@
 
   // 「学習を進める」の行き先を決める(今日の5問とは独立したステージ学習)
   // 1. 前回挑戦したステージが未クリアならその続き
-  // 2. 同分野の次の未クリアステージ
-  // 3. 全分野を順に見て最初の未クリアステージ
-  // 4. すべてクリア済みなら null
+  // 2. 前回の分野の「次」の分野から一周して、最初に見つかった未クリアステージ
+  //    (同分野を全クリアするまで出し続けると提案が先頭分野に固定されるため、分野を横断して回す)
+  // 3. すべてクリア済みなら null
   function pickLearnTarget() {
+    let startIdx = 0;
     if (state.lastStage) {
-      const cat = QUIZ_DATA.find(c => c.id === state.lastStage.catId);
-      if (cat) {
+      const idx = QUIZ_DATA.findIndex(c => c.id === state.lastStage.catId);
+      if (idx >= 0) {
+        const cat = QUIZ_DATA[idx];
         const i = state.lastStage.stageIdx;
         if (i < cat.stages.length && stageRecord(cat.id, i).stars === 0 && isUnlocked(cat, i)) {
           return { catId: cat.id, stageIdx: i, resumed: true };
         }
-        const next = nextStageIn(cat);
-        if (next >= 0) return { catId: cat.id, stageIdx: next, resumed: false };
+        startIdx = idx + 1;
       }
     }
-    for (const cat of QUIZ_DATA) {
+    for (let k = 0; k < QUIZ_DATA.length; k++) {
+      const cat = QUIZ_DATA[(startIdx + k) % QUIZ_DATA.length];
       const i = nextStageIn(cat);
       if (i >= 0) return { catId: cat.id, stageIdx: i, resumed: false };
     }
