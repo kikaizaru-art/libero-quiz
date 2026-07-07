@@ -149,23 +149,11 @@ body {
   overflow-wrap: break-word;
 }
 
-/* 見出し・ラベル・問題文・選択肢などの短めテキストは文節の切れ目で折り返す
-   (「今日」「克服」のように語の途中で行が割れるのを防ぐ)。
-   解説などの長文は行末が凸凹になるため対象外。未対応ブラウザでは従来どおり */
+/* 見出し・本文を問わず、文節の切れ目で折り返す(「今日」「克服」「出発点」の
+   ように語の途中で行が割れて読みにくくなるのを防ぐ)。word-break は継承される
+   ため body への指定で全テキストに効く。未対応ブラウザでは従来どおり */
 @supports (word-break: auto-phrase) {
-  h1, h2, h3,
-  .card-title, .today-label, .today-desc, .today-hook, .today-done-sub,
-  .talk-title, .mission-name, .continue-label,
-  .category-name, .category-progress, .stage-name, .stage-sub,
-  .question-card p, .choice, .quiz-meta,
-  .review-item-q, .review-desc, .review-next,
-  .recap-q, .recap-note, .exam-next-hint, .result-tomorrow, .result-score,
-  .library-item-title, .badge-name, .badge-desc,
-  .settings-item-name, .settings-about-sub,
-  .screen-header p, .modal-box h2, .modal-box p, .welcome-list li,
-  .btn, .toast {
-    word-break: auto-phrase;
-  }
+  body { word-break: auto-phrase; }
 }
 
 /* 中央揃えで2行に折り返る文は、行の長さが極端に偏らないよう揃える */
