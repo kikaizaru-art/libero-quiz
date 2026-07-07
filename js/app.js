@@ -135,6 +135,7 @@
     return {
       theme: "system", // "system" | "light" | "dark"
       welcomed: false, // 初回オンボーディングを表示済みか
+      debug: false,    // デバッグモード(設定のアプリ情報を7回タップで切り替え)
     };
   }
 
@@ -571,6 +572,7 @@
     pill.textContent = `連続 ${s.count}日` +
       (state.streak.freezes > 0 ? ` ・ フリーズ×${state.streak.freezes}` : "");
     pill.classList.toggle("lit", s.doneToday);
+    document.getElementById("home-debug").classList.toggle("hidden", !settings.debug);
     document.getElementById("home-xp-fill").style.width = `${(info.current / info.needed) * 100}%`;
     document.getElementById("home-xp-text").textContent = `${info.current} / ${info.needed} XP`;
 
@@ -2050,6 +2052,8 @@
       ? `復習待ちの ${n}問 を空にします。ステージ進捗や記録は残ります。`
       : "復習待ちはありません。";
     document.getElementById("btn-reset-review").disabled = n === 0;
+
+    renderDebug();
   }
 
   document.getElementById("btn-settings").addEventListener("click", () => {
@@ -2175,6 +2179,112 @@
       }
     )
   );
+
+  // ---------- デバッグモード(開発用) ----------
+  // 設定画面の「アプリ情報」を7回連続タップで有効/無効を切り替える。
+  // 学習データを直接書き換えるため、動作確認・画面確認の用途に限る
+
+  const DEBUG_TAPS = 7;           // 切り替えに必要な連続タップ数
+  const DEBUG_TAP_WINDOW = 1500;  // このms以内に続けてタップしないとカウントが戻る
+  const DEBUG_REVIEW_ADD = 5;     // 「復習に追加」1回あたりの問題数
+  let aboutTapCount = 0;
+  let aboutTapTimer = null;
+
+  function allQuestionKeys() {
+    const keys = [];
+    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+      stage.questions.forEach((_, qi) => keys.push(`${cat.id}:${si}:${qi}`))
+    ));
+    return keys;
+  }
+
+  function renderDebug() {
+    document.getElementById("debug-card").classList.toggle("hidden", !settings.debug);
+    if (!settings.debug) return;
+    const info = levelInfo(state.xp);
+    document.getElementById("debug-info").textContent =
+      `Lv.${info.level} ・ 累計 ${state.xp}XP ・ カード ${Object.keys(state.seen).length}/${allQuestionKeys().length} ・ ` +
+      `復習待ち ${Object.keys(state.wrong).length}問 ・ 実績 ${state.badges.length}/${BADGES.length}`;
+  }
+
+  document.getElementById("settings-about").addEventListener("click", () => {
+    clearTimeout(aboutTapTimer);
+    aboutTapTimer = setTimeout(() => { aboutTapCount = 0; }, DEBUG_TAP_WINDOW);
+    aboutTapCount++;
+    if (aboutTapCount >= DEBUG_TAPS) {
+      aboutTapCount = 0;
+      settings.debug = !settings.debug;
+      saveSettings();
+      renderSettings();
+      render();
+      toast(settings.debug ? "デバッグモードを有効にしました" : "デバッグモードを無効にしました");
+    } else if (aboutTapCount >= DEBUG_TAPS - 3) {
+      // 残り少なくなってから予告する(隠し機能のため普段のタップでは無反応)
+      toast(`あと${DEBUG_TAPS - aboutTapCount}回タップでデバッグモードを${settings.debug ? "無効化" : "有効化"}`);
+    }
+  });
+
+  // 各操作の後は保存と再描画をまとめて行う
+  function debugAction(id, fn) {
+    document.getElementById(id).addEventListener("click", () => {
+      fn();
+      saveState();
+      render();
+      renderSettings();
+    });
+  }
+
+  debugAction("dbg-xp100", () => { gainXp(100); toast("+100 XP"); });
+  debugAction("dbg-xp1000", () => { gainXp(1000); toast("+1000 XP"); });
+  debugAction("dbg-streak", () => {
+    state.streak.count++;
+    state.streak.last = todayStr();
+    toast(`連続学習を ${state.streak.count}日 にしました`);
+  });
+  debugAction("dbg-freeze", () => {
+    state.streak.freezes = Math.min(state.streak.freezes + 1, FREEZE_MAX);
+    toast(`フリーズ ×${state.streak.freezes}(上限${FREEZE_MAX})`);
+  });
+  debugAction("dbg-stages", () => {
+    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, i) => {
+      state.stages[`${cat.id}-${i}`] = { stars: 3, best: stage.questions.length };
+    }));
+    checkCollectionBadges();
+    toast("全ステージを星3にしました");
+  });
+  debugAction("dbg-cards", () => {
+    allQuestionKeys().forEach(k => { state.seen[k] = true; });
+    toast("全カードを解放しました");
+  });
+  debugAction("dbg-review", () => {
+    const pool = shuffle(allQuestionKeys().filter(k => !state.wrong[k]));
+    const today = todayStr();
+    const added = pool.slice(0, DEBUG_REVIEW_ADD);
+    added.forEach(k => {
+      state.wrong[k] = { count: 1, last: today, step: 0, due: today };
+      state.seen[k] = true;
+    });
+    toast(added.length > 0 ? `復習リストに${added.length}問追加しました` : "追加できる問題がありません");
+  });
+  debugAction("dbg-badges", () => {
+    state.badges = BADGES.map(b => b.id);
+    toast("全実績を解除しました");
+  });
+  debugAction("dbg-daily", () => {
+    ensureDaily();
+    state.daily.todayDone = false;
+    toast("今日の5問を未完了に戻しました");
+  });
+
+  document.getElementById("dbg-copy").addEventListener("click", () => {
+    if (!navigator.clipboard) {
+      toast("この環境ではコピーできません");
+      return;
+    }
+    navigator.clipboard.writeText(JSON.stringify(state, null, 2))
+      .then(() => toast("セーブデータをコピーしました"))
+      .catch(() => toast("コピーできませんでした"));
+  });
 
   // ---------- 共通イベント ----------
 
