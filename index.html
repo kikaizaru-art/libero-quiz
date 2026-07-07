@@ -350,11 +350,13 @@
     <!-- 解説ボトムシート -->
     <div class="explanation-sheet" id="explanation" role="region" aria-label="解説">
       <div class="explanation-verdict" id="explanation-verdict"></div>
-      <div class="knowledge-art explanation-art hidden" id="explanation-art" aria-hidden="true"></div>
-      <p id="explanation-text"></p>
+      <div class="explanation-body">
+        <p id="explanation-text"></p>
+        <div class="knowledge-art explanation-art hidden" id="explanation-art" aria-hidden="true"></div>
+      </div>
       <div class="explanation-use hidden" id="explanation-use">
-        <div class="use-label">使いどころ</div>
-        <p class="explanation-use-text" id="explanation-use-text"></p>
+        <button class="explanation-more-btn" id="btn-use" aria-expanded="false">使いどころ</button>
+        <p class="explanation-use-text hidden" id="explanation-use-text"></p>
       </div>
       <div class="explanation-more hidden" id="explanation-more">
         <button class="explanation-more-btn" id="btn-more" aria-expanded="false"></button>

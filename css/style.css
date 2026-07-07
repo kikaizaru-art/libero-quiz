@@ -578,17 +578,15 @@ button:focus-visible {
   color: var(--accent);
   letter-spacing: 0.04em;
 }
-.explanation-use {
-  margin-top: 12px;
+.explanation-use { margin-top: 12px; }
+.explanation-use-text {
+  font-size: 13px; line-height: 1.75;
+  color: var(--text);
   background: var(--pill);
   border-left: 3px solid var(--accent);
   border-radius: 12px;
   padding: 10px 14px 12px;
-}
-.explanation-use-text {
-  font-size: 13px; line-height: 1.75;
-  color: var(--text);
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 /* ライブラリ詳細モーダル */
@@ -658,7 +656,10 @@ button:focus-visible {
   padding: 8px 12px;
 }
 .knowledge-art svg { display: block; width: 100%; height: auto; }
-.explanation-art { margin: 10px auto 12px; max-width: 230px; }
+/* 解説シートでは本文の横に小さく添える(シートを縦に伸ばさない) */
+.explanation-body { display: flex; align-items: flex-start; gap: 10px; }
+.explanation-body p { flex: 1; }
+.explanation-art { flex: none; width: 104px; margin-top: 2px; padding: 5px 7px; }
 .lib-art { margin: 12px auto 0; max-width: 250px; }
 .library-item-art {
   flex: none;

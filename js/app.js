@@ -1074,6 +1074,7 @@
     const useWrap = document.getElementById("explanation-use");
     if (q.lib && q.lib.use) {
       document.getElementById("explanation-use-text").textContent = q.lib.use;
+      setUseOpen(false); // シートを短く保つため折りたたみで出す
       useWrap.classList.remove("hidden");
     } else {
       useWrap.classList.add("hidden");
@@ -1108,6 +1109,18 @@
     // 解答済みとして保存。解説表示中に落ちても同じ問題を二重集計しない
     saveQuizProgress(quiz.index + 1);
   }
+
+  // 「使いどころ」の開閉(答え合わせのスクロールを短く保つため折りたたみ)
+  function setUseOpen(open) {
+    document.getElementById("explanation-use-text").classList.toggle("hidden", !open);
+    const btn = document.getElementById("btn-use");
+    btn.setAttribute("aria-expanded", String(open));
+    btn.classList.toggle("open", open);
+  }
+
+  document.getElementById("btn-use").addEventListener("click", () => {
+    setUseOpen(document.getElementById("explanation-use-text").classList.contains("hidden"));
+  });
 
   // 「もっと知る」の開閉
   function setMoreOpen(open) {
