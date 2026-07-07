@@ -745,8 +745,17 @@ button.cal-cell { cursor: pointer; }
 .cal-dot.l3 { background: #60a5fa; }
 .cal-dot.l4 { background: #bfdbfe; }
 
-.cat-rate { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.cat-rate {
+  display: block; width: 100%;
+  background: none; cursor: pointer;
+  border: none; border-bottom: 1px solid var(--border);
+  font-family: inherit; color: inherit; text-align: left;
+  padding: 9px 0;
+  transition: background 0.15s ease;
+}
 .cat-rate:last-child { border-bottom: none; padding-bottom: 0; }
+.cat-rate:active { background: var(--pill); }
+.cat-rate-chev { color: var(--text-dim); font-size: 14px; font-weight: 700; margin-left: 6px; }
 .cat-rate-head { display: flex; justify-content: space-between; align-items: baseline; }
 .cat-rate-name { font-size: 13px; font-weight: 700; }
 .cat-rate-value { font-size: 12px; color: var(--text-dim); }

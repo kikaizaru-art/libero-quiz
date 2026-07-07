@@ -82,8 +82,9 @@
       daily: { date: null, clears: 0, correct: 0, combo: 0, claimed: [], todayDone: false },
       badges: [],
       totals: { answered: 0, correct: 0, perfects: 0, maxCombo: 0, clears: 0, reviewMastered: 0, dailyClears: 0 },
-      wrong: {},                                   // "catId:stageIdx:qIdx" -> { count, last }
+      wrong: {},                                   // "catId:stageIdx:qIdx" -> { count, last, step, due }
       seen: {},                                    // "catId:stageIdx:qIdx" -> true(ライブラリ解放済み)
+      practiceCleared: {},                         // シナリオのlibTitle -> true(実践問題のクリア済み管理)
       catStats: {},                                // catId -> { answered, correct }
       activity: {},                                // "YYYY-MM-DD" -> その日の解答数
       lastStage: null,                             // { catId, stageIdx } 最後に挑戦したステージ
@@ -181,6 +182,12 @@
 
   function addDaysStr(days) {
     return dateStr(new Date(Date.now() + days * 86400000));
+  }
+
+  function daysAgoLabel(dateKey) {
+    const [y, m, d] = dateKey.split("-").map(Number);
+    const diff = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(y, m - 1, d).getTime()) / 86400000);
+    return diff <= 0 ? "今日" : diff === 1 ? "昨日" : `${diff}日前`;
   }
 
   function ensureDaily() {
@@ -505,16 +512,20 @@
 
     const practiceCount = unlockedScenarios().length;
     if (practiceCount > 0) {
+      const cleared = Math.min(Object.keys(state.practiceCleared).length, SCENARIO_DATA.length);
       rows.push({
         label: "実践問題",
-        sub: `${Math.min(practiceCount, PRACTICE_SIZE)}問に挑戦`,
+        sub: cleared >= SCENARIO_DATA.length ? "全問クリア ・ 再挑戦" : `クリア ${cleared}/${SCENARIO_DATA.length}問`,
         onTap: startPractice,
       });
     }
 
+    const lastExam = state.exam.history[0];
     rows.push({
       label: "実力判定テスト",
-      sub: state.exam.best ? `最高評価 ${state.exam.best.rank}` : "未挑戦",
+      sub: state.exam.best
+        ? `最高評価 ${state.exam.best.rank}${lastExam ? ` ・ 前回 ${daysAgoLabel(lastExam.date)}` : ""}`
+        : "未挑戦",
       onTap: startExam,
     });
 
@@ -834,7 +845,10 @@
   function startPractice() {
     const pool = unlockedScenarios();
     if (pool.length === 0) return;
-    const items = shuffle(pool).slice(0, PRACTICE_SIZE).map(({ i }) => ({ scenarioIdx: i }));
+    // 未クリアのシナリオを優先して出題し、消化が進むようにする
+    const fresh = shuffle(pool.filter(({ s }) => !state.practiceCleared[s.libTitle]));
+    const done = shuffle(pool.filter(({ s }) => state.practiceCleared[s.libTitle]));
+    const items = shuffle(fresh.concat(done).slice(0, PRACTICE_SIZE)).map(({ i }) => ({ scenarioIdx: i }));
     quiz = newQuiz("practice", null, null, items);
     show("screen-quiz");
     renderQuestion();
@@ -921,6 +935,9 @@
     });
 
     state.totals.answered++;
+    if (isScenario && isCorrect) {
+      state.practiceCleared[q.libTitle] = true; // クリア済み管理(進捗表示と未挑戦優先の出題に使う)
+    }
     if (!isScenario) {
       state.seen[wrongKey] = true; // 出会った問題はライブラリに解放
 
@@ -1139,6 +1156,7 @@
     document.getElementById("result-score").textContent =
       `${total}問中 ${quiz.correct}問正解` +
       (mode === "review" && quiz.mastered > 0 ? ` ・ ${quiz.mastered}問を克服` : "") +
+      (mode === "practice" ? ` ・ 実践問題 ${Math.min(Object.keys(state.practiceCleared).length, SCENARIO_DATA.length)}/${SCENARIO_DATA.length}問クリア` : "") +
       (dailyFirst ? ` ・ 初回クリアボーナス +${DAILY_BONUS}XP` : "");
     renderResultXp(earnedXp);
     renderStreakResult(firstStudyToday);
@@ -1868,20 +1886,25 @@
     }
   }
 
+  // 分野別正答率:行タップでその分野の学習(ステージ選択)へ。弱点から行動に繋げる
   function renderCatRates() {
-    document.getElementById("stats-cats").innerHTML = QUIZ_DATA.map(cat => {
+    const el = document.getElementById("stats-cats");
+    el.innerHTML = "";
+    for (const cat of QUIZ_DATA) {
       const cs = state.catStats[cat.id] || { answered: 0, correct: 0 };
       const pct = cs.answered > 0 ? Math.round((cs.correct / cs.answered) * 100) : 0;
       const detail = cs.answered > 0 ? `${pct}%(${cs.correct}/${cs.answered})` : "未学習";
-      return `
-        <div class="cat-rate">
-          <div class="cat-rate-head">
-            <span class="cat-rate-name">${cat.name}</span>
-            <span class="cat-rate-value">${detail}</span>
-          </div>
-          <div class="cat-rate-bar"><div class="cat-rate-fill" style="width:${pct}%;background:${cat.color}"></div></div>
-        </div>`;
-    }).join("");
+      const btn = document.createElement("button");
+      btn.className = "cat-rate";
+      btn.innerHTML = `
+        <div class="cat-rate-head">
+          <span class="cat-rate-name">${cat.name}</span>
+          <span class="cat-rate-value">${detail}<span class="cat-rate-chev" aria-hidden="true">›</span></span>
+        </div>
+        <div class="cat-rate-bar"><div class="cat-rate-fill" style="width:${pct}%;background:${cat.color}"></div></div>`;
+      btn.addEventListener("click", () => openStages(cat.id));
+      el.appendChild(btn);
+    }
   }
 
   // ---------- 設定画面 ----------
