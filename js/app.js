@@ -891,6 +891,26 @@
     return questionAt(quiz.items[quiz.index]);
   }
 
+  // ---------- 知識カードイラスト ----------
+  // js/art.js の QUIZ_ART(lib.title がキー)。内容を象徴する図を添えて記憶のフックにする
+
+  function artSvg(lib) {
+    return (lib && typeof QUIZ_ART !== "undefined" && QUIZ_ART[lib.title]) || null;
+  }
+
+  function renderArt(el, lib, color) {
+    const svg = artSvg(lib);
+    el.innerHTML = svg || "";
+    el.classList.toggle("hidden", !svg);
+    if (color) el.style.setProperty("--art-accent", color);
+  }
+
+  // ライブラリ一覧用のサムネイルHTML(イラストがない項目は空文字)
+  function artThumb(lib, color) {
+    const svg = artSvg(lib);
+    return svg ? `<span class="library-item-art" style="--art-accent:${color}" aria-hidden="true">${svg}</span>` : "";
+  }
+
   // 解説ボトムシート
   const sheet = document.getElementById("explanation");
   function openSheet() { sheet.classList.add("open"); }
@@ -1062,6 +1082,11 @@
     // 「もっと知る」コラム(タップで展開。ライブラリにも収録)
     // 実践問題では元になった知識カード(libTitle)のコラムを出し、知識との紐づきを示す
     const lib = q.lib || (q.libTitle && TITLE_INDEX[q.libTitle] ? TITLE_INDEX[q.libTitle].q.lib : null);
+
+    // 知識カードのイラスト(答え合わせの直後に見せて記憶に残す)
+    const artCat = QUIZ_DATA.find(c => c.id === (isScenario ? q.catId : item.catId));
+    renderArt(document.getElementById("explanation-art"), lib, artCat ? artCat.color : null);
+
     const moreWrap = document.getElementById("explanation-more");
     if (lib && lib.more) {
       document.getElementById("btn-more").textContent = `もっと知る:${lib.title}`;
@@ -1648,6 +1673,7 @@
         const btn = document.createElement("button");
         btn.className = "library-item in-stage";
         btn.innerHTML = `
+          ${artThumb(q.lib, cat.color)}
           <span class="library-item-title">${q.lib.title}</span>
           <span class="library-item-chev" aria-hidden="true">›</span>`;
         btn.addEventListener("click", () => openLibEntry(cat, q));
@@ -1693,6 +1719,7 @@
       const btn = document.createElement("button");
       btn.className = "library-item";
       btn.innerHTML = `
+        ${artThumb(h.q.lib, h.cat.color)}
         <span class="library-item-cat" style="background:${h.cat.color}">${h.cat.name}</span>
         <span class="library-item-title">${h.q.lib.title}</span>
         <span class="library-item-chev" aria-hidden="true">›</span>`;
@@ -1736,6 +1763,7 @@
       const btn = document.createElement("button");
       btn.className = "library-item";
       btn.innerHTML = `
+        ${artThumb(h.q.lib, h.cat.color)}
         <span class="library-item-cat" style="background:${h.cat.color}">${h.cat.name}</span>
         <span class="library-item-title">${h.q.lib.title}</span>
         <span class="library-item-chev" aria-hidden="true">›</span>`;
@@ -1753,6 +1781,7 @@
     catEl.textContent = cat.name;
     catEl.style.background = cat.color;
     document.getElementById("lib-title").textContent = q.lib.title;
+    renderArt(document.getElementById("lib-art"), q.lib, cat.color);
     document.getElementById("lib-q").textContent = q.q;
     document.getElementById("lib-answer").textContent = q.choices[q.answer];
     document.getElementById("lib-exp").textContent = q.exp;
