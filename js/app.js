@@ -518,7 +518,10 @@
       const cleared = Math.min(Object.keys(state.practiceCleared).length, SCENARIO_DATA.length);
       rows.push({
         label: "実践問題",
-        sub: cleared >= SCENARIO_DATA.length ? "全問クリア ・ 再挑戦" : `クリア ${cleared}/${SCENARIO_DATA.length}問`,
+        // 全問解放前は「挑戦できる数がまだ限られている」ことを見せる
+        sub: practiceCount < SCENARIO_DATA.length
+          ? `挑戦可能 ${practiceCount}/${SCENARIO_DATA.length}問`
+          : cleared >= SCENARIO_DATA.length ? "全問クリア ・ 再挑戦" : `クリア ${cleared}/${SCENARIO_DATA.length}問`,
         onTap: startPractice,
       });
     }
@@ -835,13 +838,20 @@
 
   // ---------- 実践問題(シナリオ問題) ----------
 
-  // 対応する知識カードを解放済みの実践問題だけが挑戦できる
+  // シナリオの解放判定:対応する知識カードを解放済み、または対応カードと同じ
+  // 分野・ステージのカードを1枚でも解放していれば挑戦できる
+  // (厳密に1問=1カード対応だと、学習初期は挑戦可能数が数問に留まり
+  //  「毎回同じ問題しか出ない」状態になるため、難易度帯単位に緩和)
   function unlockedScenarios() {
     return SCENARIO_DATA
       .map((s, i) => ({ s, i }))
       .filter(({ s }) => {
         const e = TITLE_INDEX[s.libTitle];
-        return e && state.seen[e.key];
+        if (!e) return false;
+        if (state.seen[e.key]) return true;
+        const [catId, si] = e.key.split(":");
+        return e.cat.stages[Number(si)].questions
+          .some((_, qi) => state.seen[`${catId}:${si}:${qi}`]);
       });
   }
 
@@ -1159,7 +1169,9 @@
     document.getElementById("result-score").textContent =
       `${total}問中 ${quiz.correct}問正解` +
       (mode === "review" && quiz.mastered > 0 ? ` ・ ${quiz.mastered}問を克服` : "") +
-      (mode === "practice" ? ` ・ 実践問題 ${Math.min(Object.keys(state.practiceCleared).length, SCENARIO_DATA.length)}/${SCENARIO_DATA.length}問クリア` : "") +
+      (mode === "practice" ? ` ・ 実践問題 ${Math.min(Object.keys(state.practiceCleared).length, SCENARIO_DATA.length)}/${SCENARIO_DATA.length}問クリア` +
+        (unlockedScenarios().length < SCENARIO_DATA.length
+          ? `(挑戦可能 ${unlockedScenarios().length}問 ・ 学習を進めると増えます)` : "") : "") +
       (dailyFirst ? ` ・ 初回クリアボーナス +${DAILY_BONUS}XP` : "");
     renderResultXp(earnedXp);
     renderStreakResult(firstStudyToday);
