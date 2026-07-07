@@ -21,3 +21,4 @@
 - `js/data.js` や `js/art.js` を変更したら `sw.js` の `CACHE` バージョンを上げる(PWAキャッシュ更新のため)
 - `js/art.js` の `QUIZ_ART` は `lib.title` がキー。問題を追加したらイラストも追加し、`lib.title` を変えたらキーも合わせて変える(イラストがない項目は表示が自動でスキップされる)。SVGの描き方の決まり(サイズ・色トークン・使える要素)は `js/art.js` 冒頭のコメント参照
 - 進捗は localStorage に `catId:stageIdx:qIdx` 形式のキーで保存されるため、既存問題の並べ替えは既存ユーザーの復習リスト・ライブラリ解放状態とずれる点に留意
+- 改行は文節単位で自動処理される(`css/style.css` の「改行ルール」+ Safari 等向けの `setupPhraseBreak()`/`js/budoux.js`)。文言の追加・変更で改行位置を気にする必要はない。`js/budoux.js` は BudouX(Apache-2.0)由来の生成ファイルなので手で編集しない

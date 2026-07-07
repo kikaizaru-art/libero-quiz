@@ -2398,6 +2398,60 @@
 
   // ---------- 起動 ----------
 
+  // Safari など word-break: auto-phrase 未対応のブラウザでは、BudouX(js/budoux.js)で
+  // 文節境界にゼロ幅スペースを差し込み、CSS側の keep-all(style.css の改行ルール参照)と
+  // 合わせて Chrome と同等の文節折り返しを実現する
+  function setupPhraseBreak() {
+    if (CSS.supports("word-break", "auto-phrase")) return;
+    const ZWSP = "\u200B";
+    const HAS_JA = /[\u3041-\u30FF\u3400-\u9FFF]/;
+    const insertBreaks = (root) => {
+      if (!root || !window.BUDOUX_PARSE_JA) return;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          const p = node.parentElement;
+          if (!p || p.closest("svg, script, style, input, textarea")) return NodeFilter.FILTER_REJECT;
+          // ゼロ幅スペースを含む=処理済み。書き換えによる再通知でループしないための目印も兼ねる
+          return HAS_JA.test(node.nodeValue) && !node.nodeValue.includes(ZWSP)
+            ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        },
+      });
+      const targets = [];
+      while (walker.nextNode()) targets.push(walker.currentNode);
+      // ゼロ幅スペースは禁則処理を無視して改行可能にするため、行末に置けない
+      // 開き括弧の直後と、行頭に置けない閉じ括弧・句読点の直前では文節を結合する
+      const OPEN_END = /[「『((〈《【〔[{“‘]$/;
+      const CLOSE_START = /^[」』))〉》】〕\]}、。,.,.!?!?・:;:;…”’ー]/;
+      for (const node of targets) {
+        const parts = window.BUDOUX_PARSE_JA(node.nodeValue);
+        const merged = [];
+        for (const part of parts) {
+          if (merged.length && (OPEN_END.test(merged[merged.length - 1]) || CLOSE_START.test(part))) {
+            merged[merged.length - 1] += part;
+          } else {
+            merged.push(part);
+          }
+        }
+        if (merged.length > 1) node.nodeValue = merged.join(ZWSP);
+      }
+    };
+    // 必要なブラウザでだけモデル(約19KB)を読み込む
+    const script = document.createElement("script");
+    script.src = "js/budoux.js";
+    script.onload = () => {
+      insertBreaks(document.body);
+      new MutationObserver((muts) => {
+        for (const m of muts) {
+          if (m.type === "characterData") insertBreaks(m.target.parentElement);
+          else for (const n of m.addedNodes) insertBreaks(n.nodeType === 1 ? n : n.parentElement);
+        }
+      }).observe(document.body, { childList: true, characterData: true, subtree: true });
+      document.body.classList.add("phrase-break-js");
+    };
+    document.head.appendChild(script);
+  }
+  setupPhraseBreak();
+
   applyTheme();
   ensureDaily();
   render();
@@ -2454,9 +2508,10 @@
     const rankHidden = document.getElementById("result-rank").classList.contains("hidden");
     const rank = rankHidden ? "" : ` ${document.getElementById("result-rank-letter").textContent}評価`;
     const s = effectiveStreak();
-    const text = `リベロクイズ ${document.getElementById("result-title").textContent}${rank} — ` +
+    // 文節改行フォールバックが差し込むゼロ幅スペースは共有テキストから取り除く
+    const text = (`リベロクイズ ${document.getElementById("result-title").textContent}${rank} — ` +
       document.getElementById("result-score").textContent +
-      (s.count > 1 ? ` ・ 連続学習${s.count}日` : "");
+      (s.count > 1 ? ` ・ 連続学習${s.count}日` : "")).replace(/\u200B/g, "");
     if (navigator.share) {
       navigator.share({ text }).catch(() => { /* 共有シートのキャンセルは無視 */ });
     } else if (navigator.clipboard) {

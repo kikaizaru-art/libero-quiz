@@ -151,9 +151,19 @@ body {
 
 /* 見出し・本文を問わず、文節の切れ目で折り返す(「今日」「克服」「出発点」の
    ように語の途中で行が割れて読みにくくなるのを防ぐ)。word-break は継承される
-   ため body への指定で全テキストに効く。未対応ブラウザでは従来どおり */
+   ため body への指定で全テキストに効く */
 @supports (word-break: auto-phrase) {
   body { word-break: auto-phrase; }
+}
+
+/* auto-phrase 未対応ブラウザ(Safari 等)向けのフォールバック:
+   js/app.js の setupPhraseBreak() が BudouX(js/budoux.js)で文節境界に
+   ゼロ幅スペースを差し込み、body にこのクラスを付ける。keep-all で
+   文節の途中では折り返さず、1行に収まらない長い文節だけ
+   overflow-wrap: anywhere で途中折り返しを許す */
+body.phrase-break-js {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 /* 中央揃えで2行に折り返る文は、行の長さが極端に偏らないよう揃える */

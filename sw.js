@@ -1,7 +1,7 @@
 // リベロクイズ — Service Worker(オフライン対応)
 // stale-while-revalidate: キャッシュを即返しつつ、裏で最新版を取得して次回に反映する
 
-const CACHE = "libero-quiz-v37";
+const CACHE = "libero-quiz-v38";
 const ASSETS = [
   "./",
   "index.html",
@@ -9,6 +9,7 @@ const ASSETS = [
   "js/data.js",
   "js/art.js",
   "js/app.js",
+  "js/budoux.js",
   "manifest.json",
   "icon.svg",
 ];
