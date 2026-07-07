@@ -685,6 +685,39 @@
     };
   }
 
+  // ---------- 進行中クイズの自動保存 ----------
+  // 解答のたびに保存し、終了・中断で消す。モバイルでタブがOSに落とされても
+  // 「続きから再開」できるようにする(再開時は次の未解答の問題から)
+
+  const PROGRESS_KEY = "libero-quiz-progress-v1";
+
+  function saveQuizProgress(nextIndex) {
+    try {
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(Object.assign({}, quiz, { index: nextIndex })));
+    } catch { /* プライベートモード等では保存不可 */ }
+  }
+
+  function clearQuizProgress() {
+    try { localStorage.removeItem(PROGRESS_KEY); } catch { /* noop */ }
+  }
+
+  // 保存された進行を検証して返す。データ更新で問題が消えていたら破棄する
+  function loadQuizProgress() {
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY);
+      if (!raw) return null;
+      const saved = JSON.parse(raw);
+      const valid = saved && Array.isArray(saved.items) && saved.items.length > 0 &&
+        saved.items.every(it => {
+          try { return !!questionAt(it); } catch { return false; }
+        });
+      if (!valid) clearQuizProgress();
+      return valid ? saved : null;
+    } catch {
+      return null;
+    }
+  }
+
   function startQuiz(catId, stageIdx) {
     const cat = QUIZ_DATA.find(c => c.id === catId);
     const items = shuffle(cat.stages[stageIdx].questions.map((_, i) => ({ catId, stageIdx, qIdx: i })));
@@ -801,6 +834,7 @@
   function closeSheet() { sheet.classList.remove("open"); }
 
   function renderQuestion() {
+    saveQuizProgress(quiz.index); // 出題のたびに進行を保存(開始直後も含む)
     const item = quiz.items[quiz.index];
     const q = currentQuestion();
     const cat = QUIZ_DATA.find(c => c.id === (item.scenarioIdx !== undefined ? q.catId : item.catId));
@@ -966,6 +1000,8 @@
       `${((quiz.index + 1) / quiz.items.length) * 100}%`;
 
     saveState();
+    // 解答済みとして保存。解説表示中に落ちても同じ問題を二重集計しない
+    saveQuizProgress(quiz.index + 1);
   }
 
   // 「もっと知る」の開閉
@@ -1194,6 +1230,7 @@
 
   function finishQuiz() {
     closeSheet();
+    clearQuizProgress();
     if (quiz.mode === "exam") { finishExam(); return; }
     if (quiz.mode !== "stage") { finishLight(quiz.mode); return; }
 
@@ -1966,6 +2003,7 @@
   document.getElementById("btn-quit-confirm").addEventListener("click", () => {
     quitOverlay.classList.add("hidden");
     closeSheet();
+    clearQuizProgress();
     if (quiz && quiz.mode !== "stage") {
       show("screen-home");
       render();
@@ -1995,6 +2033,33 @@
   ensureDaily();
   render();
   show("screen-home");
+
+  // 途中で閉じた(またはOSに落とされた)クイズがあれば再開を提案
+  const MODE_LABELS = {
+    stage: "ステージ学習", review: "復習", daily: "今日の5問",
+    exam: "実力判定テスト", practice: "実践問題",
+  };
+  const savedQuiz = loadQuizProgress();
+  if (savedQuiz) {
+    const qNo = Math.min(savedQuiz.index + 1, savedQuiz.items.length);
+    document.getElementById("resume-desc").textContent =
+      `${MODE_LABELS[savedQuiz.mode] || "クイズ"} を 第${qNo}問/全${savedQuiz.items.length}問 で中断しています。`;
+    document.getElementById("resume-overlay").classList.remove("hidden");
+  }
+  document.getElementById("btn-resume-continue").addEventListener("click", () => {
+    document.getElementById("resume-overlay").classList.add("hidden");
+    const saved = loadQuizProgress();
+    if (!saved) return;
+    quiz = saved;
+    if (saved.mode === "stage") currentCatId = saved.catId; // 中断時の戻り先を復元
+    show("screen-quiz");
+    if (quiz.index >= quiz.items.length) finishQuiz(); // 最終問解答後に落ちていた場合は結果へ
+    else renderQuestion();
+  });
+  document.getElementById("btn-resume-discard").addEventListener("click", () => {
+    document.getElementById("resume-overlay").classList.add("hidden");
+    clearQuizProgress();
+  });
 
   // PWA: Service Worker登録(http(s)配信時のみ)
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {

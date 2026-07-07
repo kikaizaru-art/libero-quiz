@@ -350,6 +350,18 @@
       </div>
     </div>
 
+    <!-- 途中のクイズの再開確認 -->
+    <div id="resume-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="resume-title">
+      <div class="modal-box">
+        <h2 id="resume-title">途中のクイズがあります</h2>
+        <p id="resume-desc"></p>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" id="btn-resume-discard">破棄する</button>
+          <button class="btn btn-primary" id="btn-resume-continue">続きから再開</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ライブラリ詳細 -->
     <div id="lib-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="lib-title">
       <div class="modal-box lib-box">
