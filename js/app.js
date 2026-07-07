@@ -1822,12 +1822,67 @@
   const resetOverlay = document.getElementById("reset-overlay");
   let resetAction = null;
 
-  function confirmReset(title, desc, action) {
+  function confirmReset(title, desc, action, confirmLabel = "リセットする") {
     document.getElementById("reset-title").textContent = title;
     document.getElementById("reset-desc").textContent = desc;
+    document.getElementById("btn-reset-confirm").textContent = confirmLabel;
     resetAction = action;
     resetOverlay.classList.remove("hidden");
   }
+
+  // ---------- バックアップ(書き出し/読み込み) ----------
+
+  document.getElementById("btn-export").addEventListener("click", () => {
+    const backup = {
+      app: "libero-quiz", v: 1, exportedAt: todayStr(),
+      state, settings,
+    };
+    try {
+      const blob = new Blob([JSON.stringify(backup)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `libero-quiz-backup-${todayStr()}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast("バックアップを書き出しました");
+    } catch {
+      toast("書き出しに失敗しました");
+    }
+  });
+
+  const importFile = document.getElementById("import-file");
+  document.getElementById("btn-import").addEventListener("click", () => {
+    importFile.value = ""; // 同じファイルを選び直しても change が発火するように
+    importFile.click();
+  });
+  importFile.addEventListener("change", () => {
+    const file = importFile.files && importFile.files[0];
+    if (!file) return;
+    file.text().then(text => {
+      let backup;
+      try { backup = JSON.parse(text); } catch { backup = null; }
+      if (!backup || backup.app !== "libero-quiz" || !backup.state ||
+          typeof backup.state.xp !== "number") {
+        toast("バックアップファイルとして読み込めませんでした");
+        return;
+      }
+      confirmReset(
+        "データを読み込みますか?",
+        `現在の学習データは、このバックアップ(${backup.exportedAt || "日付不明"} 書き出し)の内容で上書きされます。`,
+        () => {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(backup.state));
+            if (backup.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(backup.settings));
+            location.reload(); // loadState のマージで新旧フィールドを補完して再起動
+          } catch {
+            toast("読み込みに失敗しました");
+          }
+        },
+        "読み込む"
+      );
+    }).catch(() => toast("ファイルを読み込めませんでした"));
+  });
 
   document.getElementById("btn-reset-cancel").addEventListener("click", () => {
     resetOverlay.classList.add("hidden");

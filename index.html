@@ -262,6 +262,25 @@
       </div>
 
       <div class="card">
+        <h2 class="card-title">バックアップ</h2>
+        <div class="settings-item">
+          <div class="settings-item-main">
+            <div class="settings-item-name">データを書き出す</div>
+            <p class="settings-item-desc">進捗と設定をJSONファイルとして保存します。機種変更やブラウザ変更時の引き継ぎに使えます。</p>
+          </div>
+          <button class="btn btn-secondary btn-small" id="btn-export">書き出す</button>
+        </div>
+        <div class="settings-item">
+          <div class="settings-item-main">
+            <div class="settings-item-name">データを読み込む</div>
+            <p class="settings-item-desc">書き出したファイルから復元します。現在のデータは上書きされます。</p>
+          </div>
+          <button class="btn btn-secondary btn-small" id="btn-import">読み込む</button>
+          <input type="file" id="import-file" accept=".json,application/json" hidden>
+        </div>
+      </div>
+
+      <div class="card">
         <h2 class="card-title">データ管理</h2>
         <div class="settings-item">
           <div class="settings-item-main">
