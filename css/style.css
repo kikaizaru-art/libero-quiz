@@ -652,6 +652,8 @@ button:focus-visible {
 }
 .continue-item:last-child { border-bottom: none; padding-bottom: 6px; }
 .continue-item:active { background: var(--pill); }
+.continue-item.locked { opacity: 0.55; cursor: default; }
+.continue-item.locked:active { background: none; }
 .continue-label { flex: 1; font-size: 14px; font-weight: 700; line-height: 1.5; }
 .continue-sub { font-size: 12px; font-weight: 700; color: var(--text-dim); white-space: nowrap; }
 .continue-sub.accent { color: var(--accent); }

@@ -16,6 +16,7 @@
   const DAILY_SIZE = 5;         // 「今日の5問」の出題数
   const PRACTICE_SIZE = 5;      // 実践問題1回あたりの出題数
   const DAILY_BONUS = 20;       // 「今日の5問」を初回クリアしたときのボーナスXP
+  const PRACTICE_UNLOCK_LEVEL = 3; // 実践問題が解放されるレベル(基礎を数日学んでから応用へ)
   const FREEZE_MAX = 2;         // ストリークフリーズの最大ストック数
   const FREEZE_EVERY = 7;       // 7日連続ごとにフリーズを1個獲得
 
@@ -268,6 +269,9 @@
     state.xp += amount;
     const after = levelInfo(state.xp).level;
     if (after > before) {
+      if (before < PRACTICE_UNLOCK_LEVEL && after >= PRACTICE_UNLOCK_LEVEL) {
+        toast("実践問題が解放されました。ホームの学習メニューから挑戦できます");
+      }
       if (after >= 5) awardBadge("level5");
       if (after >= 10) awardBadge("level10");
       showLevelUp(after);
@@ -515,17 +519,22 @@
       });
     }
 
-    const practiceCount = unlockedScenarios().length;
-    if (practiceCount > 0) {
-      const cleared = Math.min(Object.keys(state.practiceCleared).length, SCENARIO_DATA.length);
-      rows.push({
-        label: "実践問題",
-        // 全問解放前は「挑戦できる数がまだ限られている」ことを見せる
-        sub: practiceCount < SCENARIO_DATA.length
-          ? `挑戦可能 ${practiceCount}/${SCENARIO_DATA.length}問`
-          : cleared >= SCENARIO_DATA.length ? "全問クリア ・ 再挑戦" : `クリア ${cleared}/${SCENARIO_DATA.length}問`,
-        onTap: startPractice,
-      });
+    // 実践問題:レベル解放前は目標としてロック行を見せる
+    if (!practiceUnlocked()) {
+      rows.push({ label: "実践問題", sub: `Lv.${PRACTICE_UNLOCK_LEVEL}で解放`, locked: true });
+    } else {
+      const practiceCount = unlockedScenarios().length;
+      if (practiceCount > 0) {
+        const cleared = Math.min(Object.keys(state.practiceCleared).length, SCENARIO_DATA.length);
+        rows.push({
+          label: "実践問題",
+          // 全問解放前は「挑戦できる数がまだ限られている」ことを見せる
+          sub: practiceCount < SCENARIO_DATA.length
+            ? `挑戦可能 ${practiceCount}/${SCENARIO_DATA.length}問`
+            : cleared >= SCENARIO_DATA.length ? "全問クリア ・ 再挑戦" : `クリア ${cleared}/${SCENARIO_DATA.length}問`,
+          onTap: startPractice,
+        });
+      }
     }
 
     const lastExam = state.exam.history[0];
@@ -541,12 +550,13 @@
     list.innerHTML = "";
     for (const r of rows) {
       const btn = document.createElement("button");
-      btn.className = "continue-item";
+      btn.className = `continue-item${r.locked ? " locked" : ""}`;
+      btn.disabled = !!r.locked;
       btn.innerHTML = `
         <span class="continue-label">${r.label}</span>
         <span class="continue-sub${r.accent ? " accent" : ""}">${r.sub}</span>
-        <span class="library-item-chev" aria-hidden="true">›</span>`;
-      btn.addEventListener("click", r.onTap);
+        ${r.locked ? "" : `<span class="library-item-chev" aria-hidden="true">›</span>`}`;
+      if (!r.locked) btn.addEventListener("click", r.onTap);
       list.appendChild(btn);
     }
   }
@@ -857,7 +867,13 @@
       });
   }
 
+  // 実践問題はレベル解放制(基礎の学習を数日進めてから応用に入る)
+  function practiceUnlocked() {
+    return levelInfo(state.xp).level >= PRACTICE_UNLOCK_LEVEL;
+  }
+
   function startPractice() {
+    if (!practiceUnlocked()) return;
     const pool = unlockedScenarios();
     if (pool.length === 0) return;
     // 未クリアのシナリオを優先して出題し、消化が進むようにする
