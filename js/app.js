@@ -85,6 +85,7 @@
       wrong: {},                                   // "catId:stageIdx:qIdx" -> { count, last, step, due }
       seen: {},                                    // "catId:stageIdx:qIdx" -> true(ライブラリ解放済み)
       practiceCleared: {},                         // シナリオのlibTitle -> true(実践問題のクリア済み管理)
+      practiceStats: { answered: 0, correct: 0 },  // 実践問題の累計成績(記録画面用)
       catStats: {},                                // catId -> { answered, correct }
       activity: {},                                // "YYYY-MM-DD" -> その日の解答数
       lastStage: null,                             // { catId, stageIdx } 最後に挑戦したステージ
@@ -103,6 +104,7 @@
       merged.totals = Object.assign(defaultState().totals, saved.totals || {});
       merged.streak = Object.assign(defaultState().streak, saved.streak || {});
       merged.exam = Object.assign(defaultState().exam, saved.exam || {});
+      merged.practiceStats = Object.assign(defaultState().practiceStats, saved.practiceStats || {});
       // 旧データ移行:復習リストにある問題は出会い済みなのでライブラリを解放。
       // SRS導入前のエントリには due / step を補完(今日から復習可能)
       for (const k of Object.keys(merged.wrong)) {
@@ -948,8 +950,12 @@
     });
 
     state.totals.answered++;
-    if (isScenario && isCorrect) {
-      state.practiceCleared[q.libTitle] = true; // クリア済み管理(進捗表示と未挑戦優先の出題に使う)
+    if (isScenario) {
+      state.practiceStats.answered++;
+      if (isCorrect) {
+        state.practiceStats.correct++;
+        state.practiceCleared[q.libTitle] = true; // クリア済み管理(進捗表示と未挑戦優先の出題に使う)
+      }
     }
     if (!isScenario) {
       state.seen[wrongKey] = true; // 出会った問題はライブラリに解放
@@ -1850,8 +1856,47 @@
     // 分野別正答率
     renderCatRates();
 
+    // 実践問題の記録
+    renderPracticeStats();
+
     // 実力判定テストの記録
     renderExamHistory();
+  }
+
+  // 実践問題の記録:分野別のクリア状況と累計成績。未挑戦なら非表示
+  function renderPracticeStats() {
+    const card = document.getElementById("practice-stats-card");
+    const ps = state.practiceStats;
+    const clearedTotal = SCENARIO_DATA.filter(s => state.practiceCleared[s.libTitle]).length;
+    const show = ps.answered > 0 || clearedTotal > 0;
+    card.classList.toggle("hidden", !show);
+    if (!show) return;
+
+    document.getElementById("practice-stats-sub").textContent =
+      `クリア ${clearedTotal}/${SCENARIO_DATA.length}問`;
+
+    const el = document.getElementById("practice-cats");
+    el.innerHTML = "";
+    for (const cat of QUIZ_DATA) {
+      const scenarios = SCENARIO_DATA.filter(s => s.catId === cat.id);
+      if (scenarios.length === 0) continue;
+      const cleared = scenarios.filter(s => state.practiceCleared[s.libTitle]).length;
+      const pct = Math.round((cleared / scenarios.length) * 100);
+      const row = document.createElement("div");
+      row.className = "practice-cat";
+      row.innerHTML = `
+        <div class="cat-rate-head">
+          <span class="cat-rate-name">${cat.name}</span>
+          <span class="cat-rate-value">${cleared}/${scenarios.length}問</span>
+        </div>
+        <div class="cat-rate-bar"><div class="cat-rate-fill" style="width:${pct}%;background:${cat.color}"></div></div>`;
+      el.appendChild(row);
+    }
+
+    const rate = ps.answered > 0 ? Math.round((ps.correct / ps.answered) * 100) : 0;
+    document.getElementById("practice-stats-note").textContent = ps.answered > 0
+      ? `累計 ${ps.answered}回 解答 ・ 正答率 ${rate}%`
+      : "";
   }
 
   // 実力判定テストの挑戦履歴(直近5件+展開)。未挑戦なら非表示

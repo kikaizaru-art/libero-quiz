@@ -770,6 +770,11 @@ button.cal-cell { cursor: pointer; }
 .cat-rate:last-child { border-bottom: none; padding-bottom: 0; }
 .cat-rate:active { background: var(--pill); }
 .cat-rate-chev { color: var(--text-dim); font-size: 14px; font-weight: 700; margin-left: 6px; }
+
+/* 実践問題の記録(分野別クリア状況) */
+.practice-cat { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.practice-cat:last-child { border-bottom: none; padding-bottom: 0; }
+.practice-stats-note { font-size: 12px; color: var(--text-dim); margin-top: 10px; }
 .cat-rate-head { display: flex; justify-content: space-between; align-items: baseline; }
 .cat-rate-name { font-size: 13px; font-weight: 700; }
 .cat-rate-value { font-size: 12px; color: var(--text-dim); }
