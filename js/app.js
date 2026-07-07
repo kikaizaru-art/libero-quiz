@@ -11,6 +11,7 @@
   const PERFECT_BONUS = 30;
   const PASS_RATE = 0.6;        // 出題数の6割(切り上げ)正解でクリア(8問なら5問)
   const REVIEW_SIZE = 5;        // 復習1回あたりの出題数
+  const SRS_INTERVALS = [1, 3, 7]; // 復習正解ごとの次回出題までの間隔(日)。全区間を終えた次の正解で克服
   const REVIEW_PERFECT_BONUS = 15;
   const DAILY_SIZE = 5;         // 「今日の5問」の出題数
   const PRACTICE_SIZE = 5;      // 実践問題1回あたりの出題数
@@ -101,8 +102,13 @@
       merged.totals = Object.assign(defaultState().totals, saved.totals || {});
       merged.streak = Object.assign(defaultState().streak, saved.streak || {});
       merged.exam = Object.assign(defaultState().exam, saved.exam || {});
-      // 旧データ移行:復習リストにある問題は出会い済みなのでライブラリを解放
-      for (const k of Object.keys(merged.wrong)) merged.seen[k] = true;
+      // 旧データ移行:復習リストにある問題は出会い済みなのでライブラリを解放。
+      // SRS導入前のエントリには due / step を補完(今日から復習可能)
+      for (const k of Object.keys(merged.wrong)) {
+        merged.seen[k] = true;
+        const e = merged.wrong[k];
+        if (!e.due) { e.due = todayStr(); e.step = 0; }
+      }
       return merged;
     } catch {
       return defaultState();
@@ -171,6 +177,10 @@
 
   function todayStr() {
     return dateStr(new Date());
+  }
+
+  function addDaysStr(days) {
+    return dateStr(new Date(Date.now() + days * 86400000));
   }
 
   function ensureDaily() {
@@ -478,9 +488,9 @@
   function renderContinueCard() {
     const rows = [];
 
-    const reviewCount = Object.keys(state.wrong).length;
+    const reviewCount = dueWrongKeys().length;
     if (reviewCount > 0) {
-      rows.push({ label: "復習", sub: `${reviewCount}問待ち`, accent: true, onTap: () => startReview() });
+      rows.push({ label: "今日の復習", sub: `${reviewCount}問`, accent: true, onTap: () => startReview() });
     }
 
     const t = pickLearnTarget();
@@ -729,11 +739,17 @@
     renderQuestion();
   }
 
+  // 今日出題対象の復習キー(次回出題日 due が今日以前のもの)
+  function dueWrongKeys(catId) {
+    const today = todayStr();
+    let keys = Object.keys(state.wrong).filter(k => (state.wrong[k].due || today) <= today);
+    if (catId) keys = keys.filter(k => k.startsWith(catId + ":"));
+    return keys;
+  }
+
   // catId を渡すとその分野の復習待ちだけから出題する(復習画面の分野ピル用)
   function startReview(catId) {
-    let pool = Object.keys(state.wrong);
-    if (catId) pool = pool.filter(k => k.startsWith(catId + ":"));
-    const keys = shuffle(pool).slice(0, REVIEW_SIZE);
+    const keys = shuffle(dueWrongKeys(catId)).slice(0, REVIEW_SIZE);
     if (keys.length === 0) return;
     const items = keys.map(k => {
       const [catId, stageIdx, qIdx] = k.split(":");
@@ -927,13 +943,21 @@
       }
     }
 
-    // 復習リストの更新:間違えたら追加、正解したら除去(実践問題は対象外)
+    // 復習リストの更新(間隔反復):正解するたび次回出題を 1日→3日→7日後と延ばし、
+    // 全区間を終えた次の正解で克服(除去)。間違えたら区間を最初に戻す(実践問題は対象外)
     if (isCorrect) {
       if (!isScenario && state.wrong[wrongKey]) {
-        delete state.wrong[wrongKey];
-        if (quiz.mode === "review") {
-          quiz.mastered++;
-          state.totals.reviewMastered++;
+        const entry = state.wrong[wrongKey];
+        const step = entry.step || 0;
+        if (step >= SRS_INTERVALS.length) {
+          delete state.wrong[wrongKey];
+          if (quiz.mode === "review") {
+            quiz.mastered++;
+            state.totals.reviewMastered++;
+          }
+        } else {
+          entry.due = addDaysStr(SRS_INTERVALS[step]);
+          entry.step = step + 1;
         }
       }
     } else {
@@ -941,6 +965,8 @@
         const entry = state.wrong[wrongKey] || { count: 0, last: null };
         entry.count++;
         entry.last = today;
+        entry.step = 0;
+        entry.due = today;
         state.wrong[wrongKey] = entry;
       }
       quiz.wrongList.push({ q: q.q, correct: q.choices[q.answer] });
@@ -1121,7 +1147,7 @@
 
     const btnRetry = document.getElementById("btn-retry");
     if (mode === "review") {
-      const remaining = Object.keys(state.wrong).length;
+      const remaining = dueWrongKeys().length;
       btnRetry.classList.toggle("hidden", remaining === 0);
       btnRetry.textContent = "続けて復習";
       btnRetry.onclick = () => startReview();
@@ -1304,50 +1330,87 @@
 
   let reviewListOpen = false; // 苦手リストの展開状態(セッション内のみ)
 
+  // 明日以降に控えている復習の、いちばん近い日付と件数
+  function nextReviewInfo() {
+    const today = todayStr();
+    let best = null;
+    for (const k of Object.keys(state.wrong)) {
+      const due = state.wrong[k].due || today;
+      if (due <= today) continue;
+      if (!best || due < best.date) best = { date: due, count: 1 };
+      else if (due === best.date) best.count++;
+    }
+    return best;
+  }
+
+  function formatDateKey(key) {
+    const [, m, d] = key.split("-").map(Number);
+    return `${m}月${d}日`;
+  }
+
   function renderReview() {
     const keys = Object.keys(state.wrong);
-    const n = keys.length;
+    const total = keys.length;
+    const due = dueWrongKeys();
+    const n = due.length;
 
-    document.getElementById("review-sub").textContent =
-      n > 0 ? "正解すると復習リストから消えます(克服)" : "苦手をなくして知識を定着させましょう";
+    document.getElementById("review-sub").textContent = total > 0
+      ? "正解するたび次の復習が先に延び、繰り返し正解で克服です"
+      : "苦手をなくして知識を定着させましょう";
 
     const card = document.getElementById("review-card");
     const emptyCard = document.getElementById("review-empty-card");
-    card.classList.toggle("hidden", n === 0);
-    emptyCard.classList.toggle("hidden", n > 0);
+    card.classList.toggle("hidden", total === 0);
+    emptyCard.classList.toggle("hidden", total > 0);
 
-    if (n === 0) {
+    if (total === 0) {
       // 空状態:今日の5問が未クリアなら、そのまま始められる導線を出す
       document.getElementById("review-goto-daily").classList.toggle("hidden", state.daily.todayDone);
     } else {
-      document.getElementById("review-count").textContent = `復習待ち ${n}問`;
-      document.getElementById("btn-review-start").textContent =
-        `復習する(${Math.min(n, REVIEW_SIZE)}問)`;
-
-      // 分野別の内訳ピル(タップでその分野だけ復習)
-      const counts = {};
-      keys.forEach(k => {
-        const catId = k.split(":")[0];
-        counts[catId] = (counts[catId] || 0) + 1;
-      });
+      const btn = document.getElementById("btn-review-start");
+      const nextEl = document.getElementById("review-next");
       const pillsEl = document.getElementById("review-cats");
       pillsEl.innerHTML = "";
-      for (const c of QUIZ_DATA.filter(c => counts[c.id])) {
-        const btn = document.createElement("button");
-        btn.className = "review-cat-pill";
-        btn.innerHTML = `
-          <i class="review-cat-dot" style="background:${c.color}" aria-hidden="true"></i>
-          <span>${c.name}</span>
-          <span class="review-cat-pill-count">${counts[c.id]}</span>`;
-        btn.addEventListener("click", () => startReview(c.id));
-        pillsEl.appendChild(btn);
+
+      if (n > 0) {
+        document.getElementById("review-count").textContent = `今日の復習 ${n}問`;
+        btn.classList.remove("hidden");
+        btn.textContent = `復習する(${Math.min(n, REVIEW_SIZE)}問)`;
+        // 後日に回っている分の予告
+        nextEl.classList.toggle("hidden", total === n);
+        nextEl.textContent = `残り${total - n}問は間隔をあけて後日出題されます`;
+
+        // 分野別の内訳ピル(タップでその分野だけ復習)
+        const counts = {};
+        due.forEach(k => {
+          const catId = k.split(":")[0];
+          counts[catId] = (counts[catId] || 0) + 1;
+        });
+        for (const c of QUIZ_DATA.filter(c => counts[c.id])) {
+          const pill = document.createElement("button");
+          pill.className = "review-cat-pill";
+          pill.innerHTML = `
+            <i class="review-cat-dot" style="background:${c.color}" aria-hidden="true"></i>
+            <span>${c.name}</span>
+            <span class="review-cat-pill-count">${counts[c.id]}</span>`;
+          pill.addEventListener("click", () => startReview(c.id));
+          pillsEl.appendChild(pill);
+        }
+      } else {
+        // すべて後日に回っている:今日はやることなし
+        document.getElementById("review-count").textContent = "今日の復習はありません";
+        btn.classList.add("hidden");
+        const next = nextReviewInfo();
+        nextEl.classList.toggle("hidden", !next);
+        if (next) nextEl.textContent =
+          `次の復習は ${formatDateKey(next.date)} に ${next.count}問(全${total}問)`;
       }
     }
 
     // 間違えた回数が多い問題(上位3件+展開。正解はネタバレしない)
     const listCard = document.getElementById("review-list-card");
-    listCard.classList.toggle("hidden", n === 0);
-    if (n > 0) {
+    listCard.classList.toggle("hidden", total === 0);
+    if (total > 0) {
       const entries = keys.map(k => {
         const [catId, si, qi] = k.split(":");
         const cat = QUIZ_DATA.find(c => c.id === catId);
@@ -1619,7 +1682,7 @@
   });
 
   function updateNavBadge() {
-    const n = Object.keys(state.wrong).length;
+    const n = dueWrongKeys().length;
     const badge = document.getElementById("nav-review-badge");
     badge.textContent = n;
     badge.classList.toggle("hidden", n === 0);
@@ -1678,7 +1741,7 @@
       { value: `${effectiveStreak().count}日`, label: "連続学習" },
       { value: learnedDays, label: "学習日数" },
       { value: `${rate}%`, label: "正答率", sub: `${state.totals.correct}/${state.totals.answered}問` },
-      { value: Object.keys(state.wrong).length, label: "復習待ち ›", tap: true },
+      { value: dueWrongKeys().length, label: "今日の復習 ›", tap: true },
     ];
     const summaryEl = document.getElementById("stats-summary");
     summaryEl.innerHTML = "";

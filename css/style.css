@@ -383,6 +383,7 @@ button:focus-visible {
 .btn-review-start { margin: 4px 0 0; }
 
 .review-count { font-size: 16px; font-weight: 800; }
+.review-next { font-size: 12px; color: var(--text-dim); line-height: 1.6; margin-top: 6px; }
 /* 分野別の内訳ピル(タップでその分野だけ復習) */
 .review-cat-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
 .review-cat-pill {
