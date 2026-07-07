@@ -21,6 +21,7 @@
           <div class="player-row">
             <span class="player-level">Lv.<span id="home-level">1</span></span>
             <span class="streak-pill" id="home-streak">連続 0日</span>
+            <span class="streak-pill debug-pill hidden" id="home-debug">DEBUG</span>
           </div>
           <div class="xp-bar"><div class="xp-fill" id="home-xp-fill"></div></div>
           <div class="xp-text" id="home-xp-text">0 / 100 XP</div>
@@ -307,6 +308,33 @@
           </div>
           <button class="btn btn-danger btn-small" id="btn-reset-all">リセット</button>
         </div>
+      </div>
+
+      <!-- デバッグモード(アプリ情報を7回タップで表示される開発用パネル) -->
+      <div class="card hidden" id="debug-card">
+        <h2 class="card-title">デバッグモード</h2>
+        <p class="settings-item-desc">開発用の機能です。学習データを直接書き換えるため、動作確認以外では使わないでください。</p>
+        <div class="debug-grid">
+          <button class="btn btn-secondary btn-small" id="dbg-xp100">+100 XP</button>
+          <button class="btn btn-secondary btn-small" id="dbg-xp1000">+1000 XP</button>
+          <button class="btn btn-secondary btn-small" id="dbg-streak">連続学習 +1日</button>
+          <button class="btn btn-secondary btn-small" id="dbg-freeze">フリーズ +1</button>
+          <button class="btn btn-secondary btn-small" id="dbg-stages">全ステージ星3</button>
+          <button class="btn btn-secondary btn-small" id="dbg-cards">全カード解放</button>
+          <button class="btn btn-secondary btn-small" id="dbg-review">復習に5問追加</button>
+          <button class="btn btn-secondary btn-small" id="dbg-badges">全実績解除</button>
+          <button class="btn btn-secondary btn-small" id="dbg-daily">今日の5問を未完了に</button>
+          <button class="btn btn-secondary btn-small" id="dbg-copy">セーブデータをコピー</button>
+        </div>
+        <p class="settings-note" id="debug-info"></p>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">アプリ情報</h2>
+        <button class="settings-about" id="settings-about">
+          <span class="settings-item-name">リベロクイズ</span>
+          <span class="settings-about-sub">1日5問のビジネス教養</span>
+        </button>
       </div>
     </section>
 
