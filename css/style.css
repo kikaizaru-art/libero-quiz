@@ -141,6 +141,43 @@ body::before {
   pointer-events: none;
 }
 
+/* ---------- 改行ルール ---------- */
+/* 全体:行頭に長音符・小書き文字などが来ない厳格な禁則処理と、
+   長い英数字(URL・英単語)がカードからはみ出さない折り返しを指定する */
+body {
+  line-break: strict;
+  overflow-wrap: break-word;
+}
+
+/* 見出し・ラベル・問題文・選択肢などの短めテキストは文節の切れ目で折り返す
+   (「今日」「克服」のように語の途中で行が割れるのを防ぐ)。
+   解説などの長文は行末が凸凹になるため対象外。未対応ブラウザでは従来どおり */
+@supports (word-break: auto-phrase) {
+  h1, h2, h3,
+  .card-title, .today-label, .today-desc, .today-hook, .today-done-sub,
+  .talk-title, .mission-name, .continue-label,
+  .category-name, .category-progress, .stage-name, .stage-sub,
+  .question-card p, .choice, .quiz-meta,
+  .review-item-q, .review-desc, .review-next,
+  .recap-q, .recap-note, .exam-next-hint, .result-tomorrow, .result-score,
+  .library-item-title, .badge-name, .badge-desc,
+  .settings-item-name, .settings-about-sub,
+  .screen-header p, .modal-box h2, .modal-box p, .welcome-list li,
+  .btn, .toast {
+    word-break: auto-phrase;
+  }
+}
+
+/* 中央揃えで2行に折り返る文は、行の長さが極端に偏らないよう揃える */
+.screen-header p, .today-hook, .result-tomorrow { text-wrap: balance; }
+
+/* 長文の段落は、最終行に1〜2文字だけ残るような折り返しを避ける */
+#explanation-text, .explanation-more-text, .explanation-use-text,
+.lib-q, .lib-exp, .lib-more, .lib-use,
+.library-note, .welcome-lead, .settings-item-desc, .settings-note {
+  text-wrap: pretty;
+}
+
 #app {
   max-width: 480px;
   margin: 0 auto;
@@ -1188,6 +1225,11 @@ button.cal-cell { cursor: pointer; }
   font-family: inherit; font-size: 13px; font-weight: 700;
   color: var(--text-dim);
   display: flex; align-items: center; justify-content: center;
+  white-space: nowrap; min-width: 0;
+}
+/* 320px級の狭い端末では「ライブラリ」が収まるよう文字を一段小さく */
+@media (max-width: 359px) {
+  .nav-item { font-size: 11px; }
 }
 .nav-item.active { color: var(--text); }
 .nav-badge {
