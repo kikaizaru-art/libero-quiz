@@ -129,7 +129,10 @@
   const SETTINGS_KEY = "libero-quiz-settings-v1";
 
   function defaultSettings() {
-    return { theme: "system" }; // "system" | "light" | "dark"
+    return {
+      theme: "system", // "system" | "light" | "dark"
+      welcomed: false, // 初回オンボーディングを表示済みか
+    };
   }
 
   function loadSettings() {
@@ -1465,6 +1468,7 @@
 
   let libSelected = QUIZ_DATA[0].id; // 表示中の分野タブ
   let libScene = "all";              // 表示中の場面フィルタ
+  let libQuery = "";                 // 検索文字列(入力中は横断検索を表示)
   const libOpen = {};                // catId → 展開中ステージ番号のSet(セッション内のみ保持)
 
   // 分野の初期展開ステージ:カードが増える余地のある最初のステージ(全解放なら初級)
@@ -1550,6 +1554,15 @@
       scenesEl.appendChild(btn);
     }
 
+    // 検索中は場面ピル・分野タブを隠し、解放済みカードの横断検索を出す
+    const query = libQuery.trim().toLowerCase();
+    scenesEl.classList.toggle("hidden", query.length > 0);
+    if (query) {
+      tabsEl.classList.add("hidden");
+      renderSearchList(query);
+      return;
+    }
+
     // 場面で絞り込み中は分野タブを隠し、全分野横断の一覧を出す
     tabsEl.classList.toggle("hidden", libScene !== "all");
     if (libScene !== "all") {
@@ -1614,6 +1627,49 @@
     });
     list.appendChild(card);
   }
+
+  // 検索結果(全分野横断・解放済みカードのみ。タイトル・問題文・正解に部分一致)
+  function renderSearchList(query) {
+    const list = document.getElementById("library-list");
+    list.innerHTML = "";
+    const hits = [];
+    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+      stage.questions.forEach((q, qi) => {
+        if (!state.seen[`${cat.id}:${si}:${qi}`]) return;
+        const haystack = `${q.lib.title} ${q.q} ${q.choices[q.answer]}`.toLowerCase();
+        if (haystack.includes(query)) hits.push({ cat, q });
+      })
+    ));
+    const card = document.createElement("div");
+    card.className = "card library-cat";
+    card.innerHTML = `
+      <div class="library-cat-head">
+        <span class="library-cat-name">検索結果</span>
+        <span class="library-cat-count">${hits.length}件</span>
+      </div>`;
+    if (hits.length === 0) {
+      const p = document.createElement("p");
+      p.className = "library-empty";
+      p.textContent = "一致する知識カードはありません(解放済みのカードから検索します)";
+      card.appendChild(p);
+    }
+    for (const h of hits) {
+      const btn = document.createElement("button");
+      btn.className = "library-item";
+      btn.innerHTML = `
+        <span class="library-item-cat" style="background:${h.cat.color}">${h.cat.name}</span>
+        <span class="library-item-title">${h.q.lib.title}</span>
+        <span class="library-item-chev" aria-hidden="true">›</span>`;
+      btn.addEventListener("click", () => openLibEntry(h.cat, h.q));
+      card.appendChild(btn);
+    }
+    list.appendChild(card);
+  }
+
+  document.getElementById("library-search").addEventListener("input", (e) => {
+    libQuery = e.target.value;
+    renderLibrary();
+  });
 
   // 場面で絞り込んだ一覧(全分野横断・解放済みカードのみ)
   function renderSceneList() {
@@ -2145,6 +2201,44 @@
   document.getElementById("btn-resume-discard").addEventListener("click", () => {
     document.getElementById("resume-overlay").classList.add("hidden");
     clearQuizProgress();
+  });
+
+  // 初回オンボーディング(学習済みの既存ユーザーには出さない)
+  if (!settings.welcomed && state.totals.answered > 0) {
+    settings.welcomed = true;
+    saveSettings();
+  }
+  if (!settings.welcomed && !savedQuiz) {
+    document.getElementById("welcome-overlay").classList.remove("hidden");
+  }
+  function closeWelcome() {
+    document.getElementById("welcome-overlay").classList.add("hidden");
+    settings.welcomed = true;
+    saveSettings();
+  }
+  document.getElementById("btn-welcome-close").addEventListener("click", closeWelcome);
+  document.getElementById("btn-welcome-start").addEventListener("click", () => {
+    closeWelcome();
+    startDaily();
+  });
+
+  // リザルトの共有(Web Share API。未対応環境ではクリップボードにコピー)
+  document.getElementById("btn-share").addEventListener("click", () => {
+    const rankHidden = document.getElementById("result-rank").classList.contains("hidden");
+    const rank = rankHidden ? "" : ` ${document.getElementById("result-rank-letter").textContent}評価`;
+    const s = effectiveStreak();
+    const text = `リベロクイズ ${document.getElementById("result-title").textContent}${rank} — ` +
+      document.getElementById("result-score").textContent +
+      (s.count > 1 ? ` ・ 連続学習${s.count}日` : "");
+    if (navigator.share) {
+      navigator.share({ text }).catch(() => { /* 共有シートのキャンセルは無視 */ });
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text)
+        .then(() => toast("結果をコピーしました"))
+        .catch(() => toast("コピーできませんでした"));
+    } else {
+      toast("この環境では共有できません");
+    }
   });
 
   // PWA: Service Worker登録(http(s)配信時のみ)

@@ -139,6 +139,7 @@
           <button class="btn btn-secondary" id="btn-retry">再挑戦</button>
           <button class="btn btn-primary" id="btn-continue">次へ</button>
         </div>
+        <button class="list-more-btn" id="btn-share">結果を共有</button>
       </div>
     </section>
 
@@ -176,6 +177,7 @@
         <p id="library-sub"></p>
       </header>
       <p class="library-note hidden" id="library-note">クイズで出会った問題が、会話や仕事で語れる知識カードとして集まります。カードを開くと、解説・「もっと知る」コラム・使いどころをいつでも見返せます。</p>
+      <input type="search" class="library-search" id="library-search" placeholder="カードを検索" aria-label="カードを検索" autocomplete="off">
       <div class="library-scenes" id="library-scenes" role="tablist" aria-label="使う場面で絞り込み"></div>
       <div class="library-tabs" id="library-tabs" role="tablist" aria-label="分野の切り替え"></div>
       <div id="library-list"></div>
@@ -347,6 +349,23 @@
         <div class="modal-buttons">
           <button class="btn btn-secondary" id="btn-reset-cancel">やめる</button>
           <button class="btn btn-danger" id="btn-reset-confirm">リセットする</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 初回オンボーディング -->
+    <div id="welcome-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+      <div class="modal-box">
+        <h2 id="welcome-title">リベロクイズへようこそ</h2>
+        <p class="welcome-lead">1日5問のクイズで、会話や発想に効くビジネス教養を身につけるアプリです。</p>
+        <ul class="welcome-list">
+          <li>解いた問題は「ライブラリ」に知識カードとして集まります</li>
+          <li>間違えた問題は「復習」で間隔をあけて再出題され、克服できます</li>
+          <li>毎日続けると連続記録とレベルが伸びていきます</li>
+        </ul>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" id="btn-welcome-close">あとで</button>
+          <button class="btn btn-primary" id="btn-welcome-start">今日の5問を始める</button>
         </div>
       </div>
     </div>
