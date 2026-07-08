@@ -105,6 +105,7 @@
       practiceStats: { answered: 0, correct: 0 },  // 実践問題の累計成績(記録画面用)
       catStats: {},                                // catId -> { answered, correct }
       activity: {},                                // "YYYY-MM-DD" -> その日の解答数
+      days: {},                                    // "YYYY-MM-DD" -> { answered, correct, cards } 週間レポート用の日別内訳
       lastStage: null,                             // { catId, stageIdx } 最後に挑戦したステージ
       exam: { best: null, history: [] },           // best: { rank, score, date } / history: 直近の挑戦記録
     };
@@ -1219,6 +1220,13 @@
         state.practiceCleared[q.libTitle] = true; // クリア済み管理(進捗表示と未挑戦優先の出題に使う)
       }
     }
+    const today = todayStr();
+    // 週間レポート用の日別内訳(新カードは seen に入れる前に数える)
+    const day = state.days[today] || (state.days[today] = { answered: 0, correct: 0, cards: 0 });
+    day.answered++;
+    if (isCorrect) day.correct++;
+    if (!isScenario && !state.seen[wrongKey]) day.cards++;
+
     if (!isScenario) {
       state.seen[wrongKey] = true; // 出会った問題はライブラリに解放
 
@@ -1227,7 +1235,6 @@
       cs.answered++;
       if (isCorrect) cs.correct++;
     }
-    const today = todayStr();
     state.activity[today] = (state.activity[today] || 0) + 1;
 
     // 実力判定テストの採点:難易度加重(初級1点・中級2点・上級3点)。失点は分野別に記録
@@ -2184,6 +2191,71 @@
     })
   );
 
+  // ---------- 週間レポート ----------
+
+  // 週の7日分の日付キー(日曜始まり。offset -1 で先週)
+  function weekKeys(offset = 0) {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + offset * 7);
+    return Array.from({ length: 7 }, (_, i) =>
+      dateStr(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)));
+  }
+
+  // 週のまとめ。解答数・学習日数は既存の activity から取るので過去の週にも効く。
+  // 正答率・新カード数は日別内訳(state.days)導入後の解答分から集計する
+  function weekSummary(offset = 0) {
+    const keys = weekKeys(offset);
+    const s = { answered: 0, learnedDays: 0, detailAnswered: 0, correct: 0, cards: 0 };
+    for (const k of keys) {
+      const n = state.activity[k] || 0;
+      s.answered += n;
+      if (n > 0) s.learnedDays++;
+      const d = state.days[k];
+      if (d) {
+        s.detailAnswered += d.answered;
+        s.correct += d.correct;
+        s.cards += d.cards;
+      }
+    }
+    return s;
+  }
+
+  function renderWeeklyReport() {
+    const week = weekSummary();
+    const last = weekSummary(-1);
+    const keys = weekKeys();
+
+    document.getElementById("weekly-range").textContent =
+      `${formatDateKey(keys[0])}〜${formatDateKey(keys[6])}`;
+
+    const rate = week.detailAnswered > 0
+      ? `${Math.round((week.correct / week.detailAnswered) * 100)}%` : "—";
+    const tiles = [
+      { value: week.answered, label: "解答数" },
+      { value: rate, label: "正答率" },
+      { value: week.cards, label: "新カード" },
+      { value: `${week.learnedDays}日`, label: "学習日数" },
+    ];
+    document.getElementById("weekly-grid").innerHTML = tiles.map(t => `
+      <div class="stat">
+        <div class="stat-value">${t.value}</div>
+        <div class="stat-label">${t.label}</div>
+      </div>`).join("");
+
+    // 先週との比較(先週の記録がなければ励ましの一言)
+    const note = document.getElementById("weekly-note");
+    if (last.answered > 0) {
+      const diff = week.answered - last.answered;
+      note.textContent = diff > 0 ? `先週(${last.answered}問)より ${diff}問 多く解いています`
+        : diff < 0 ? `先週は${last.answered}問。あと${-diff}問で先週に並びます`
+        : `先週と同じ${last.answered}問のペースです`;
+    } else {
+      note.textContent = week.answered > 0
+        ? "今週の学習がここに積み上がります"
+        : "今週はまだ解答がありません。今日の5問から始めましょう";
+    }
+  }
+
   function renderStats() {
     // サマリー(1段4タイル。累計解答・正解は正答率タイルの下段に吸収)
     const learnedDays = Object.keys(state.activity).length;
@@ -2210,6 +2282,8 @@
       });
       summaryEl.appendChild(el);
     }
+
+    renderWeeklyReport();
 
     renderCalendar();
 
