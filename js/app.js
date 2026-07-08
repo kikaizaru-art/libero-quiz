@@ -12,6 +12,7 @@
   const PASS_RATE = 0.6;        // 出題数の6割(切り上げ)正解でクリア(8問なら5問)
   const REVIEW_SIZE = 5;        // 復習1回あたりの出題数
   const SRS_INTERVALS = [1, 3, 7]; // 復習正解ごとの次回出題までの間隔(日)。全区間を終えた次の正解で克服
+  const RETENTION_INTERVALS = [14, 30, 60]; // 定着チェック:正解済みの問題を再出題するまでの間隔(日)。最終区間以降は60日ごと
   const REVIEW_PERFECT_BONUS = 15;
   const DAILY_SIZE = 5;         // 「今日の5問」の出題数
   const PRACTICE_SIZE = 5;      // 実践問題1回あたりの出題数
@@ -84,6 +85,7 @@
       badges: [],
       totals: { answered: 0, correct: 0, perfects: 0, maxCombo: 0, clears: 0, reviewMastered: 0, dailyClears: 0 },
       wrong: {},                                   // "catId:stageIdx:qIdx" -> { count, last, step, due }
+      learned: {},                                 // "catId:stageIdx:qIdx" -> { step, due } 定着チェックの予定(正解済みの問題)
       seen: {},                                    // "catId:stageIdx:qIdx" -> true(ライブラリ解放済み)
       practiceCleared: {},                         // シナリオのlibTitle -> true(実践問題のクリア済み管理)
       practiceStats: { answered: 0, correct: 0 },  // 実践問題の累計成績(記録画面用)
@@ -507,7 +509,7 @@
   function renderContinueCard() {
     const rows = [];
 
-    const reviewCount = dueWrongKeys().length;
+    const reviewCount = reviewDueCount();
     if (reviewCount > 0) {
       rows.push({ label: "今日の復習", sub: `${reviewCount}問`, accent: true, onTap: () => startReview() });
     }
@@ -722,6 +724,7 @@
     return {
       mode, catId, stageIdx, items,
       index: 0, correct: 0, combo: 0, maxCombo: 0, xp: 0, mastered: 0,
+      retained: 0, // 復習モードで定着チェックに正解した数
       wrongList: [],
       // 実力判定テスト用:難易度加重スコアと内訳(他モードでは未使用)
       score: 0, stageCorrect: [0, 0, 0], catLost: {},
@@ -780,9 +783,26 @@
     return keys;
   }
 
+  // 今日出題対象の定着チェックキー(正解済みの問題の抜き打ち確認)
+  function dueLearnedKeys(catId) {
+    const today = todayStr();
+    let keys = Object.keys(state.learned)
+      .filter(k => state.learned[k].due <= today && !state.wrong[k]);
+    if (catId) keys = keys.filter(k => k.startsWith(catId + ":"));
+    return keys;
+  }
+
+  // 復習タブに出す件数(復習待ち+定着チェック)
+  function reviewDueCount(catId) {
+    return dueWrongKeys(catId).length + dueLearnedKeys(catId).length;
+  }
+
   // catId を渡すとその分野の復習待ちだけから出題する(復習画面の分野ピル用)
+  // 間違えた問題を優先し、枠が余れば定着チェックで埋める
   function startReview(catId) {
-    const keys = shuffle(dueWrongKeys(catId)).slice(0, REVIEW_SIZE);
+    const keys = shuffle(dueWrongKeys(catId))
+      .concat(shuffle(dueLearnedKeys(catId)))
+      .slice(0, REVIEW_SIZE);
     if (keys.length === 0) return;
     const items = keys.map(k => {
       const [catId, stageIdx, qIdx] = k.split(":");
@@ -929,7 +949,9 @@
 
     document.getElementById("quiz-progress-fill").style.width = `${(quiz.index / total) * 100}%`;
     document.getElementById("quiz-progress-text").textContent = `${quiz.index + 1}/${total}`;
-    const metaPrefix = quiz.mode === "review" ? `復習(${cat.name})`
+    // 復習モードでは、間違えた問題の復習か正解済み問題の定着チェックかを見出しで区別する
+    const metaPrefix = quiz.mode === "review"
+      ? `${state.wrong[`${item.catId}:${item.stageIdx}:${item.qIdx}`] ? "復習" : "定着チェック"}(${cat.name})`
       : quiz.mode === "daily" ? `今日の5問(${cat.name})`
       : quiz.mode === "exam" ? `実力判定テスト ${cat.stages[item.stageIdx].name}(${cat.name})`
       : quiz.mode === "practice" ? `実践問題(${cat.name})`
@@ -981,6 +1003,7 @@
     // 実践問題は進捗キー(catId:stageIdx:qIdx)を持たないため、seen・復習リスト・分野別成績には触れない
     const isScenario = item.scenarioIdx !== undefined;
     const wrongKey = isScenario ? null : `${item.catId}:${item.stageIdx}:${item.qIdx}`;
+    const wasWrong = !isScenario && !!state.wrong[wrongKey]; // 解答前に復習リスト入りしていたか(定着チェック判定用)
     const isCorrect = choiceIdx === q.answer;
     const buttons = document.querySelectorAll("#choices .choice");
     buttons.forEach(b => {
@@ -1046,6 +1069,23 @@
         state.wrong[wrongKey] = entry;
       }
       quiz.wrongList.push({ q: q.q, correct: q.choices[q.answer] });
+    }
+
+    // 定着チェック(忘却対策):正解できている問題も忘れた頃に復習へ戻す。
+    // 期日を迎えたチェックに正解するたび間隔を 14日→30日→60日(以降60日ごと)と延ばし、
+    // 期日前の正解は間隔を延ばさず先送りだけする。間違えたら復習リスト(短い間隔)に戻す
+    if (!isScenario) {
+      if (isCorrect && !state.wrong[wrongKey]) {
+        const entry = state.learned[wrongKey] || { step: -1, due: null };
+        if (entry.due === null || entry.due <= today) {
+          entry.step = Math.min(entry.step + 1, RETENTION_INTERVALS.length - 1);
+        }
+        entry.due = addDaysStr(RETENTION_INTERVALS[entry.step]);
+        state.learned[wrongKey] = entry;
+        if (quiz.mode === "review" && !wasWrong) quiz.retained++;
+      } else if (!isCorrect) {
+        delete state.learned[wrongKey]; // 復習リスト側のSRSで鍛え直す
+      }
     }
 
     if (isCorrect) {
@@ -1233,6 +1273,7 @@
     document.getElementById("result-score").textContent =
       `${total}問中 ${quiz.correct}問正解` +
       (mode === "review" && quiz.mastered > 0 ? ` ・ ${quiz.mastered}問を克服` : "") +
+      (mode === "review" && quiz.retained > 0 ? ` ・ ${quiz.retained}問の定着を確認` : "") +
       (mode === "practice" ? ` ・ 実践問題 ${Math.min(Object.keys(state.practiceCleared).length, SCENARIO_DATA.length)}/${SCENARIO_DATA.length}問クリア` +
         (unlockedScenarios().length < SCENARIO_DATA.length
           ? `(挑戦可能 ${unlockedScenarios().length}問 ・ 学習を進めると増えます)` : "") : "") +
@@ -1244,7 +1285,7 @@
 
     const btnRetry = document.getElementById("btn-retry");
     if (mode === "review") {
-      const remaining = dueWrongKeys().length;
+      const remaining = reviewDueCount();
       btnRetry.classList.toggle("hidden", remaining === 0);
       btnRetry.textContent = "続けて復習";
       btnRetry.onclick = () => startReview();
@@ -1427,15 +1468,18 @@
 
   let reviewListOpen = false; // 苦手リストの展開状態(セッション内のみ)
 
-  // 明日以降に控えている復習の、いちばん近い日付と件数
+  // 明日以降に控えている復習(復習待ち+定着チェック)の、いちばん近い日付と件数
   function nextReviewInfo() {
     const today = todayStr();
     let best = null;
-    for (const k of Object.keys(state.wrong)) {
-      const due = state.wrong[k].due || today;
-      if (due <= today) continue;
+    const consider = (due) => {
+      if (due <= today) return;
       if (!best || due < best.date) best = { date: due, count: 1 };
       else if (due === best.date) best.count++;
+    };
+    for (const k of Object.keys(state.wrong)) consider(state.wrong[k].due || today);
+    for (const k of Object.keys(state.learned)) {
+      if (!state.wrong[k]) consider(state.learned[k].due);
     }
     return best;
   }
@@ -1448,19 +1492,22 @@
   function renderReview() {
     const keys = Object.keys(state.wrong);
     const total = keys.length;
-    const due = dueWrongKeys();
-    const n = due.length;
+    const dueW = dueWrongKeys();
+    const dueL = dueLearnedKeys();
+    const n = dueW.length + dueL.length;
+    // 復習待ちも定着チェックの予定も何もないときだけ空状態
+    const hasAny = total > 0 || Object.keys(state.learned).length > 0;
 
-    document.getElementById("review-sub").textContent = total > 0
+    document.getElementById("review-sub").textContent = hasAny
       ? "正解するたび次の復習が先に延び、繰り返し正解で克服です"
       : "苦手をなくして知識を定着させましょう";
 
     const card = document.getElementById("review-card");
     const emptyCard = document.getElementById("review-empty-card");
-    card.classList.toggle("hidden", total === 0);
-    emptyCard.classList.toggle("hidden", total > 0);
+    card.classList.toggle("hidden", !hasAny);
+    emptyCard.classList.toggle("hidden", hasAny);
 
-    if (total === 0) {
+    if (!hasAny) {
       // 空状態:今日の5問が未クリアなら、そのまま始められる導線を出す
       document.getElementById("review-goto-daily").classList.toggle("hidden", state.daily.todayDone);
     } else {
@@ -1473,13 +1520,16 @@
         document.getElementById("review-count").textContent = `今日の復習 ${n}問`;
         btn.classList.remove("hidden");
         btn.textContent = `復習する(${Math.min(n, REVIEW_SIZE)}問)`;
-        // 後日に回っている分の予告
-        nextEl.classList.toggle("hidden", total === n);
-        nextEl.textContent = `残り${total - n}問は間隔をあけて後日出題されます`;
+        // 後日に回っている分の予告と、定着チェックの内訳
+        const notes = [];
+        if (total > dueW.length) notes.push(`残り${total - dueW.length}問は間隔をあけて後日出題されます`);
+        if (dueL.length > 0) notes.push(`うち${dueL.length}問は定着チェック(正解済みの問題を忘れていないか確認)です`);
+        nextEl.classList.toggle("hidden", notes.length === 0);
+        nextEl.textContent = notes.join("。");
 
         // 分野別の内訳ピル(タップでその分野だけ復習)
         const counts = {};
-        due.forEach(k => {
+        dueW.concat(dueL).forEach(k => {
           const catId = k.split(":")[0];
           counts[catId] = (counts[catId] || 0) + 1;
         });
@@ -1500,7 +1550,8 @@
         const next = nextReviewInfo();
         nextEl.classList.toggle("hidden", !next);
         if (next) nextEl.textContent =
-          `次の復習は ${formatDateKey(next.date)} に ${next.count}問(全${total}問)`;
+          `次の復習は ${formatDateKey(next.date)} に ${next.count}問` +
+          (total > 0 ? `(復習待ち ${total}問)` : "(定着チェック)");
       }
     }
 
@@ -1836,7 +1887,7 @@
   });
 
   function updateNavBadge() {
-    const n = dueWrongKeys().length;
+    const n = reviewDueCount();
     const badge = document.getElementById("nav-review-badge");
     badge.textContent = n;
     badge.classList.toggle("hidden", n === 0);
@@ -1895,7 +1946,7 @@
       { value: `${effectiveStreak().count}日`, label: "連続学習" },
       { value: learnedDays, label: "学習日数" },
       { value: `${rate}%`, label: "正答率", sub: `${state.totals.correct}/${state.totals.answered}問` },
-      { value: dueWrongKeys().length, label: "今日の復習 ›", tap: true },
+      { value: reviewDueCount(), label: "今日の復習 ›", tap: true },
     ];
     const summaryEl = document.getElementById("stats-summary");
     summaryEl.innerHTML = "";
@@ -2091,9 +2142,9 @@
       b.setAttribute("aria-checked", String(active));
     });
 
-    const n = Object.keys(state.wrong).length;
+    const n = Object.keys(state.wrong).length + Object.keys(state.learned).length;
     document.getElementById("settings-review-desc").textContent = n > 0
-      ? `復習待ちの ${n}問 を空にします。ステージ進捗や記録は残ります。`
+      ? `復習待ちと定着チェックの予定 計${n}問 を空にします。ステージ進捗や記録は残ります。`
       : "復習待ちはありません。";
     document.getElementById("btn-reset-review").disabled = n === 0;
 
@@ -2198,9 +2249,10 @@
   document.getElementById("btn-reset-review").addEventListener("click", () =>
     confirmReset(
       "復習リストをリセットしますか?",
-      "復習待ちの問題がすべて消えます。この操作は取り消せません。",
+      "復習待ちの問題と定着チェックの予定がすべて消えます。この操作は取り消せません。",
       () => {
         state.wrong = {};
+        state.learned = {};
         saveState();
         render();
         renderSettings();
@@ -2248,7 +2300,7 @@
     const info = levelInfo(state.xp);
     document.getElementById("debug-info").textContent =
       `Lv.${info.level} ・ 累計 ${state.xp}XP ・ カード ${Object.keys(state.seen).length}/${allQuestionKeys().length} ・ ` +
-      `復習待ち ${Object.keys(state.wrong).length}問 ・ 実績 ${state.badges.length}/${BADGES.length}`;
+      `復習待ち ${Object.keys(state.wrong).length}問 ・ 定着チェック予定 ${Object.keys(state.learned).length}問 ・ 実績 ${state.badges.length}/${BADGES.length}`;
   }
 
   document.getElementById("settings-about").addEventListener("click", () => {
