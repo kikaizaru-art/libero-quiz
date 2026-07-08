@@ -1015,6 +1015,26 @@ button.cal-cell { cursor: pointer; }
 .quiz-body { padding-bottom: 40px; }
 .quiz-meta { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
 
+/* ○×スピードの制限時間バー(1問ごとにアニメーションを再生) */
+.quiz-timer {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--track);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.quiz-timer-fill {
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(1);
+}
+.quiz-timer-fill.run { animation: quiz-timer-run 10s linear forwards; }
+@keyframes quiz-timer-run {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
 .question-card {
   background: var(--q-bg);
   color: var(--q-text);

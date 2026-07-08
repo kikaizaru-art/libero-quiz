@@ -26,6 +26,14 @@
   const WEAK_MIN_ANSWERED = 10;   // 弱点判定に必要な最低解答数(データ不足の分野を除外)
   const WEAK_RATE_MAX = 0.85;     // この正答率以上の分野は弱点として扱わない
 
+  // ○×スピード:全問からランダムに「答えは◯◯である」の正誤を制限時間内に判定する
+  const TF_SIZE = 10;             // 1回あたりの出題数
+  const TF_SECONDS = 10;          // 1問の制限時間(秒)
+
+  // カード当て:解説文(正解の語は伏せる)からライブラリの知識カードを当てる
+  const CARDGUESS_SIZE = 8;       // 1回あたりの出題数
+  const CARDGUESS_MIN = 8;        // 挑戦に必要な解放済みカード数
+
   // 実力判定テスト:全分野から初級・中級・上級を5問ずつ、計15問を難易度順に出題して実力を評価
   const EXAM_SIZE_PER_STAGE = 5;              // 各難易度からの出題数
   const EXAM_MAX_PER_CAT = 3;                 // 同一分野の出題上限(偏り防止)
@@ -557,6 +565,23 @@
       }
     }
 
+    // あそびで復習:同じ問題を別形式で新鮮に解き直す
+    rows.push({
+      label: "○×スピード",
+      sub: `全分野から${TF_SIZE}問 ・ 1問${TF_SECONDS}秒`,
+      onTap: startTrueFalse,
+    });
+    const cardCount = Object.keys(state.seen).length;
+    if (cardCount >= CARDGUESS_MIN) {
+      rows.push({
+        label: "カード当て",
+        sub: `集めたカードから${CARDGUESS_SIZE}問`,
+        onTap: startCardGuess,
+      });
+    } else {
+      rows.push({ label: "カード当て", sub: `カード${CARDGUESS_MIN}枚で解放`, locked: true });
+    }
+
     const lastExam = state.exam.history[0];
     rows.push({
       label: "実力判定テスト",
@@ -868,6 +893,99 @@
     renderQuestion();
   }
 
+  // ---------- ○×スピード(2択・制限時間つき) ----------
+  // 既存の4択を「問題の答えは◯◯である」という正誤判定に変換して出題する。
+  // 動的生成した問題(item.dynamic)を通常の解答フローにそのまま流す
+
+  function tfItems() {
+    const all = [];
+    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+      stage.questions.forEach((q, qi) => all.push({ catId: cat.id, stageIdx: si, qIdx: qi, q }))
+    ));
+    return shuffle(all).slice(0, TF_SIZE).map(base => {
+      const q = base.q;
+      const useTrue = Math.random() < 0.5;
+      const shown = useTrue
+        ? q.choices[q.answer]
+        : q.choices[shuffle(q.choices.map((_, i) => i).filter(i => i !== q.answer))[0]];
+      return {
+        catId: base.catId, stageIdx: base.stageIdx, qIdx: base.qIdx,
+        dynamic: {
+          q: `『${q.q}』の答えは「${shown}」である — ○か×か?`,
+          choices: ["○ 正しい", "× 誤り"],
+          answer: useTrue ? 0 : 1,
+          exp: useTrue ? q.exp : `正しい答えは「${q.choices[q.answer]}」。${q.exp}`,
+          lib: q.lib,
+          // ふりかえり用:○×ではなく元の問題の答えを見せる
+          recapCorrect: `${useTrue ? "○ 正しい" : "× 誤り"}(答えは「${q.choices[q.answer]}」)`,
+        },
+      };
+    });
+  }
+
+  function startTrueFalse() {
+    quiz = newQuiz("tf", null, null, tfItems());
+    show("screen-quiz");
+    renderQuestion();
+  }
+
+  // ---------- カード当て(解説からライブラリの知識カードを逆引き) ----------
+
+  // 解説文から正解につながる語(カード名・正解の選択肢とその語片)を伏せる
+  function maskAnswerWords(text, q) {
+    const words = new Set([q.lib.title, q.choices[q.answer]]);
+    // 「プラトンとイデア論」→「プラトン」「イデア論」のような語片も伏せる
+    q.lib.title.split(/[『』「」()と・、\s]+/).forEach(w => words.add(w));
+    q.choices[q.answer].split(/[『』「」()・、\s]+/).forEach(w => words.add(w));
+    let out = text;
+    for (const w of [...words].filter(w => w.length >= 2).sort((a, b) => b.length - a.length)) {
+      out = out.split(w).join("◯◯");
+    }
+    return out.replace(/(◯◯)+/g, "◯◯");
+  }
+
+  // 解放済みカードの一覧(カード当ての出題プール)
+  function seenCardPool() {
+    const pool = [];
+    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
+      stage.questions.forEach((q, qi) => {
+        if (state.seen[`${cat.id}:${si}:${qi}`]) pool.push({ cat, q, si, qi });
+      })
+    ));
+    return pool;
+  }
+
+  function cardGuessItems() {
+    const pool = seenCardPool();
+    if (pool.length < CARDGUESS_MIN) return null;
+    return shuffle(pool).slice(0, CARDGUESS_SIZE).map(p => {
+      // 誤答肢は同分野の解放済みカードを優先(絞り込みにくくする)
+      const others = shuffle(pool.filter(o => o.q.lib.title !== p.q.lib.title));
+      const wrongTitles = others.filter(o => o.cat.id === p.cat.id)
+        .concat(others.filter(o => o.cat.id !== p.cat.id))
+        .slice(0, 3).map(o => o.q.lib.title);
+      const choices = [p.q.lib.title, ...wrongTitles];
+      return {
+        catId: p.cat.id, stageIdx: p.si, qIdx: p.qi,
+        dynamic: {
+          q: `「${maskAnswerWords(p.q.exp, p.q)}」 — この解説にあてはまる知識カードは?`,
+          choices,
+          answer: 0,
+          exp: p.q.exp,
+          lib: p.q.lib,
+        },
+      };
+    });
+  }
+
+  function startCardGuess() {
+    const items = cardGuessItems();
+    if (!items) return;
+    quiz = newQuiz("cardguess", null, null, items);
+    show("screen-quiz");
+    renderQuestion();
+  }
+
   // ---------- 実力判定テスト(全問ランダムの実力テスト) ----------
 
   // 初級→中級→上級の順に各5問。各層内はランダムで、同一分野は全体で最大3問まで
@@ -915,6 +1033,7 @@
   }
 
   function questionAt(item) {
+    if (item.dynamic) return item.dynamic; // ○×スピード・カード当ての動的生成問題
     if (item.scenarioIdx !== undefined) return SCENARIO_DATA[item.scenarioIdx];
     const cat = QUIZ_DATA.find(c => c.id === item.catId);
     return cat.stages[item.stageIdx].questions[item.qIdx];
@@ -986,6 +1105,29 @@
   function openSheet() { sheet.classList.add("open"); }
   function closeSheet() { sheet.classList.remove("open"); }
 
+  // ---------- ○×スピードの制限時間 ----------
+  // 問題表示から一定時間で自動的に不正解(時間切れ)として解答処理へ流す
+
+  let tfTimeout = null;
+
+  function clearTfTimer() {
+    clearTimeout(tfTimeout);
+    tfTimeout = null;
+    document.getElementById("quiz-timer").classList.add("hidden");
+    document.getElementById("quiz-timer-fill").classList.remove("run");
+  }
+
+  function startTfTimer() {
+    const fill = document.getElementById("quiz-timer-fill");
+    document.getElementById("quiz-timer").classList.remove("hidden");
+    fill.classList.remove("run");
+    void fill.offsetWidth; // アニメーションを問題ごとに最初から再生する
+    fill.style.animationDuration = `${TF_SECONDS}s`;
+    fill.classList.add("run");
+    clearTimeout(tfTimeout);
+    tfTimeout = setTimeout(() => answer(-1, null), TF_SECONDS * 1000);
+  }
+
   function renderQuestion() {
     saveQuizProgress(quiz.index); // 出題のたびに進行を保存(開始直後も含む)
     const item = quiz.items[quiz.index];
@@ -1004,6 +1146,8 @@
       : quiz.mode === "exam" ? `実力判定テスト ${cat.stages[item.stageIdx].name}(${cat.name})`
       : quiz.mode === "practice" ? `実践問題(${cat.name})`
       : quiz.mode === "weak" ? `弱点特訓(${cat.name} ${cat.stages[item.stageIdx].name})`
+      : quiz.mode === "tf" ? `○×スピード(${cat.name})`
+      : quiz.mode === "cardguess" ? `カード当て(${cat.name})`
       : `${cat.name} ${cat.stages[item.stageIdx].name}`;
     document.getElementById("quiz-meta").textContent =
       `${metaPrefix} ・ 第${quiz.index + 1}問 / 全${total}問`;
@@ -1019,8 +1163,8 @@
 
     const choicesEl = document.getElementById("choices");
     choicesEl.innerHTML = "";
-    // 選択肢の並びも毎回シャッフル
-    const order = shuffle(q.choices.map((_, i) => i));
+    // 選択肢の並びも毎回シャッフル(○×は「○/×」の並びを固定)
+    const order = quiz.mode === "tf" ? q.choices.map((_, i) => i) : shuffle(q.choices.map((_, i) => i));
     const buildChoices = () => {
       choicesEl.innerHTML = "";
       order.forEach(choiceIdx => {
@@ -1044,9 +1188,14 @@
     } else {
       buildChoices();
     }
+
+    if (quiz.mode === "tf") startTfTimer();
+    else clearTfTimer();
   }
 
+  // choiceIdx が -1 のときは時間切れ(○×スピード)として不正解扱いにする
   function answer(choiceIdx, clickedBtn) {
+    clearTfTimer();
     const q = currentQuestion();
     const item = quiz.items[quiz.index];
     // 実践問題は進捗キー(catId:stageIdx:qIdx)を持たないため、seen・復習リスト・分野別成績には触れない
@@ -1117,7 +1266,7 @@
         entry.due = today;
         state.wrong[wrongKey] = entry;
       }
-      quiz.wrongList.push({ q: q.q, correct: q.choices[q.answer] });
+      quiz.wrongList.push({ q: q.q, correct: q.recapCorrect || q.choices[q.answer] });
     }
 
     // 定着チェック(忘却対策):正解できている問題も忘れた頃に復習へ戻す。
@@ -1149,7 +1298,7 @@
       state.daily.combo = Math.max(state.daily.combo, quiz.combo);
     } else {
       quiz.combo = 0;
-      clickedBtn.classList.add("wrong");
+      if (clickedBtn) clickedBtn.classList.add("wrong"); // 時間切れではどれも選ばれていない
       document.getElementById("question-card").classList.add("shake");
       setTimeout(() => document.getElementById("question-card").classList.remove("shake"), 450);
     }
@@ -1157,7 +1306,7 @@
     const verdict = document.getElementById("explanation-verdict");
     verdict.textContent = isCorrect
       ? (quiz.combo >= 2 ? `正解(${quiz.combo}問連続正解)` : "正解")
-      : `不正解 — 正解は「${q.choices[q.answer]}」`;
+      : `${choiceIdx === -1 ? "時間切れ" : "不正解"} — 正解は「${q.choices[q.answer]}」`;
     verdict.className = `explanation-verdict ${isCorrect ? "good" : "bad"}`;
     document.getElementById("explanation-text").textContent = q.exp;
 
@@ -1318,6 +1467,8 @@
       mode === "review" ? "復習完了"
       : mode === "practice" ? "実践問題 完了"
       : mode === "weak" ? "弱点特訓 完了"
+      : mode === "tf" ? "○×スピード 完了"
+      : mode === "cardguess" ? "カード当て 完了"
       : "今日の5問 完了";
     document.getElementById("result-stars").classList.add("hidden");
     document.getElementById("result-rank").classList.add("hidden");
@@ -1356,6 +1507,14 @@
       btnRetry.classList.toggle("hidden", !weakTarget());
       btnRetry.textContent = "もう一度特訓";
       btnRetry.onclick = () => startWeak();
+    } else if (mode === "tf") {
+      btnRetry.classList.remove("hidden");
+      btnRetry.textContent = "もう一度挑戦";
+      btnRetry.onclick = () => startTrueFalse();
+    } else if (mode === "cardguess") {
+      btnRetry.classList.remove("hidden");
+      btnRetry.textContent = "もう一度挑戦";
+      btnRetry.onclick = () => startCardGuess();
     } else {
       btnRetry.classList.remove("hidden");
       btnRetry.textContent = "もう一度挑戦";
@@ -2479,10 +2638,13 @@
   // クイズ中断(アプリ内モーダル)
   const quitOverlay = document.getElementById("quit-overlay");
   document.getElementById("btn-quiz-quit").addEventListener("click", () => {
+    clearTfTimer(); // 確認ダイアログ表示中に時間切れにならないよう止める
     quitOverlay.classList.remove("hidden");
   });
   document.getElementById("btn-quit-cancel").addEventListener("click", () => {
     quitOverlay.classList.add("hidden");
+    // ○×スピードの解答中(解説シートが開いていない)なら制限時間を仕切り直す
+    if (quiz && quiz.mode === "tf" && !sheet.classList.contains("open")) startTfTimer();
   });
   document.getElementById("btn-quit-confirm").addEventListener("click", () => {
     quitOverlay.classList.add("hidden");
@@ -2576,6 +2738,7 @@
   const MODE_LABELS = {
     stage: "ステージ学習", review: "復習", daily: "今日の5問",
     exam: "実力判定テスト", practice: "実践問題", weak: "弱点特訓",
+    tf: "○×スピード", cardguess: "カード当て",
   };
   const savedQuiz = loadQuizProgress();
   if (savedQuiz) {
