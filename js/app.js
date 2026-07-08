@@ -2618,24 +2618,173 @@
     startDaily();
   });
 
-  // リザルトの共有(Web Share API。未対応環境ではクリップボードにコピー)
-  document.getElementById("btn-share").addEventListener("click", () => {
+  // ---------- リザルトの共有(画像カード+テキスト) ----------
+
+  const SHARE_SIZE = 1080; // 正方形(SNSのタイムラインで欠けない)
+  const SHARE_RANK_COLORS = { // css の .rank-* と同じグラデーション
+    S: ["#facc15", "#ca8a04"], A: ["#34d399", "#059669"], B: ["#60a5fa", "#2563eb"],
+    C: ["#fb923c", "#ea580c"], D: ["#94a3b8", "#64748b"],
+  };
+
+  // 文節改行フォールバックが差し込むゼロ幅スペースを取り除く
+  function stripZwsp(s) {
+    return s.replace(/\u200B/g, "");
+  }
+
+  // リザルト画面の表示内容から共有素材を組み立てる
+  function shareContent() {
+    const title = stripZwsp(document.getElementById("result-title").textContent);
+    const score = stripZwsp(document.getElementById("result-score").textContent);
     const rankHidden = document.getElementById("result-rank").classList.contains("hidden");
-    const rank = rankHidden ? "" : ` ${document.getElementById("result-rank-letter").textContent}評価`;
-    const s = effectiveStreak();
-    // 文節改行フォールバックが差し込むゼロ幅スペースは共有テキストから取り除く
-    const text = (`リベロクイズ ${document.getElementById("result-title").textContent}${rank} — ` +
-      document.getElementById("result-score").textContent +
-      (s.count > 1 ? ` ・ 連続学習${s.count}日` : "")).replace(/\u200B/g, "");
-    if (navigator.share) {
-      navigator.share({ text }).catch(() => { /* 共有シートのキャンセルは無視 */ });
-    } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(text)
-        .then(() => toast("結果をコピーしました"))
-        .catch(() => toast("コピーできませんでした"));
-    } else {
-      toast("この環境では共有できません");
+    const rank = rankHidden ? null : document.getElementById("result-rank-letter").textContent;
+    const rankLabel = rankHidden ? null : stripZwsp(document.getElementById("result-rank-label").textContent);
+    const starsEl = document.getElementById("result-stars");
+    const stars = starsEl.classList.contains("hidden")
+      ? null : starsEl.querySelectorAll(".star.earned").length;
+    const streak = effectiveStreak().count;
+    const text = `リベロクイズ ${title}${rank ? ` ${rank}評価` : ""} — ${score}` +
+      (streak > 1 ? ` ・ 連続学習${streak}日` : "");
+    return { title, score, rank, rankLabel, stars, streak, text };
+  }
+
+  // measureText で収まる幅ごとに行を割る(日本語は文字単位で折り返す)
+  function wrapShareText(ctx, text, maxWidth) {
+    const lines = [];
+    let line = "";
+    for (const ch of text) {
+      if (ctx.measureText(line + ch).width > maxWidth && line) {
+        lines.push(line);
+        line = ch;
+      } else {
+        line += ch;
+      }
     }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  // リザルトカード画像を Canvas で描く
+  function buildShareImage(c) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = SHARE_SIZE;
+    const ctx = canvas.getContext("2d");
+    const cx = SHARE_SIZE / 2;
+    const FONT = 'system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif';
+
+    // 背景(アプリのダークテーマ基調+うっすら差し色の光)
+    const bg = ctx.createLinearGradient(0, 0, 0, SHARE_SIZE);
+    bg.addColorStop(0, "#0f172a");
+    bg.addColorStop(1, "#1e293b");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, SHARE_SIZE, SHARE_SIZE);
+    const glow = ctx.createRadialGradient(cx, 470, 0, cx, 470, 560);
+    glow.addColorStop(0, "rgba(234, 179, 8, 0.14)");
+    glow.addColorStop(1, "rgba(234, 179, 8, 0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, SHARE_SIZE, SHARE_SIZE);
+
+    ctx.textAlign = "center";
+
+    // ヘッダー(アプリ名)
+    ctx.fillStyle = "#eab308";
+    ctx.font = `800 52px ${FONT}`;
+    ctx.fillText("リベロクイズ", cx, 130);
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = `500 30px ${FONT}`;
+    ctx.fillText("1日5問のビジネス教養", cx, 185);
+
+    // タイトル
+    ctx.fillStyle = "#f1f5f9";
+    ctx.font = `800 64px ${FONT}`;
+    ctx.fillText(c.title, cx, 330);
+
+    // 中央の主役:ランク文字 or 星 or 区切り線
+    let scoreY = 560;
+    if (c.rank) {
+      const [top, bottom] = SHARE_RANK_COLORS[c.rank] || SHARE_RANK_COLORS.D;
+      const grad = ctx.createLinearGradient(0, 400, 0, 620);
+      grad.addColorStop(0, top);
+      grad.addColorStop(1, bottom);
+      ctx.fillStyle = grad;
+      ctx.font = `800 220px ${FONT}`;
+      ctx.fillText(c.rank, cx, 620);
+      if (c.rankLabel) {
+        ctx.fillStyle = "#cbd5e1";
+        ctx.font = `600 34px ${FONT}`;
+        const lines = wrapShareText(ctx, c.rankLabel, 880);
+        lines.forEach((l, i) => ctx.fillText(l, cx, 700 + i * 48));
+        scoreY = 700 + lines.length * 48 + 60;
+      } else {
+        scoreY = 730;
+      }
+    } else if (c.stars !== null) {
+      ctx.font = `400 130px ${FONT}`;
+      let starX = cx - 170;
+      for (let i = 1; i <= 3; i++) {
+        ctx.fillStyle = i <= c.stars ? "#eab308" : "#334155";
+        ctx.fillText("★", starX, 580);
+        starX += 170;
+      }
+      scoreY = 700;
+    } else {
+      ctx.fillStyle = "#334155";
+      ctx.fillRect(cx - 120, 460, 240, 6);
+      scoreY = 580;
+    }
+
+    // スコア(長文は折り返し)
+    ctx.fillStyle = "#e2e8f0";
+    ctx.font = `600 40px ${FONT}`;
+    wrapShareText(ctx, c.score, 920).forEach((l, i) => ctx.fillText(l, cx, scoreY + i * 58));
+
+    // 連続学習(2日以上のときだけ誇る)
+    if (c.streak > 1) {
+      ctx.fillStyle = "#eab308";
+      ctx.font = `700 38px ${FONT}`;
+      ctx.fillText(`連続学習 ${c.streak}日`, cx, 930);
+    }
+
+    // フッター(日付)
+    ctx.fillStyle = "#64748b";
+    ctx.font = `500 28px ${FONT}`;
+    ctx.fillText(todayStr().replace(/-/g, "."), cx, 1020);
+
+    return canvas;
+  }
+
+  // 共有:画像付き共有 → テキスト共有 → 画像ダウンロードの順にフォールバック
+  document.getElementById("btn-share").addEventListener("click", () => {
+    const c = shareContent();
+    buildShareImage(c).toBlob(blob => {
+      if (blob) {
+        const file = new File([blob], `libero-quiz-${todayStr()}.png`, { type: "image/png" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], text: c.text })
+            .catch(() => { /* 共有シートのキャンセルは無視 */ });
+          return;
+        }
+        if (!navigator.share) {
+          // 共有シート未対応(主にデスクトップ):画像を保存する
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = file.name;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          toast("結果画像を保存しました");
+          return;
+        }
+      }
+      if (navigator.share) {
+        navigator.share({ text: c.text }).catch(() => { /* キャンセルは無視 */ });
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(c.text)
+          .then(() => toast("結果をコピーしました"))
+          .catch(() => toast("コピーできませんでした"));
+      } else {
+        toast("この環境では共有できません");
+      }
+    }, "image/png");
   });
 
   // PWA: Service Worker登録(http(s)配信時のみ)
