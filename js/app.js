@@ -21,6 +21,11 @@
   const FREEZE_MAX = 2;         // ストリークフリーズの最大ストック数
   const FREEZE_EVERY = 7;       // 7日連続ごとにフリーズを1個獲得
 
+  // 弱点特訓:正答率が低い分野を集中的に鍛えるモード
+  const WEAK_SIZE = 8;            // 1回あたりの出題数
+  const WEAK_MIN_ANSWERED = 10;   // 弱点判定に必要な最低解答数(データ不足の分野を除外)
+  const WEAK_RATE_MAX = 0.85;     // この正答率以上の分野は弱点として扱わない
+
   // 実力判定テスト:全分野から初級・中級・上級を5問ずつ、計15問を難易度順に出題して実力を評価
   const EXAM_SIZE_PER_STAGE = 5;              // 各難易度からの出題数
   const EXAM_MAX_PER_CAT = 3;                 // 同一分野の出題上限(偏り防止)
@@ -514,6 +519,16 @@
       rows.push({ label: "今日の復習", sub: `${reviewCount}問`, accent: true, onTap: () => startReview() });
     }
 
+    // 弱点特訓:正答率が低い分野があるときだけ提案する
+    const weak = weakTarget();
+    if (weak) {
+      rows.push({
+        label: "弱点特訓",
+        sub: `${weak.cat.name} ・ 正答率${Math.round(weak.rate * 100)}%`,
+        onTap: startWeak,
+      });
+    }
+
     const t = pickLearnTarget();
     if (t) {
       const cat = QUIZ_DATA.find(c => c.id === t.catId);
@@ -820,6 +835,39 @@
     renderQuestion();
   }
 
+  // ---------- 弱点特訓(正答率が低い分野の集中出題) ----------
+
+  // 特訓対象の分野:十分解答していて正答率が最も低い分野。弱点がなければ null
+  function weakTarget() {
+    let worst = null;
+    for (const cat of QUIZ_DATA) {
+      const cs = state.catStats[cat.id];
+      if (!cs || cs.answered < WEAK_MIN_ANSWERED) continue;
+      const rate = cs.correct / cs.answered;
+      if (rate >= WEAK_RATE_MAX) continue;
+      if (!worst || rate < worst.rate) worst = { cat, rate };
+    }
+    return worst;
+  }
+
+  // 弱点分野の全ステージから出題。復習リスト入りの問題を優先して枠を埋める
+  function startWeak() {
+    const target = weakTarget();
+    if (!target) return;
+    const cat = target.cat;
+    const all = [];
+    cat.stages.forEach((stage, si) =>
+      stage.questions.forEach((_, qi) => all.push({ catId: cat.id, stageIdx: si, qIdx: qi }))
+    );
+    const inWrong = it => !!state.wrong[`${it.catId}:${it.stageIdx}:${it.qIdx}`];
+    const items = shuffle(
+      shuffle(all.filter(inWrong)).concat(shuffle(all.filter(it => !inWrong(it)))).slice(0, WEAK_SIZE)
+    );
+    quiz = newQuiz("weak", cat.id, null, items);
+    show("screen-quiz");
+    renderQuestion();
+  }
+
   // ---------- 実力判定テスト(全問ランダムの実力テスト) ----------
 
   // 初級→中級→上級の順に各5問。各層内はランダムで、同一分野は全体で最大3問まで
@@ -955,6 +1003,7 @@
       : quiz.mode === "daily" ? `今日の5問(${cat.name})`
       : quiz.mode === "exam" ? `実力判定テスト ${cat.stages[item.stageIdx].name}(${cat.name})`
       : quiz.mode === "practice" ? `実践問題(${cat.name})`
+      : quiz.mode === "weak" ? `弱点特訓(${cat.name} ${cat.stages[item.stageIdx].name})`
       : `${cat.name} ${cat.stages[item.stageIdx].name}`;
     document.getElementById("quiz-meta").textContent =
       `${metaPrefix} ・ 第${quiz.index + 1}問 / 全${total}問`;
@@ -1266,7 +1315,10 @@
     saveState();
 
     document.getElementById("result-title").textContent =
-      mode === "review" ? "復習完了" : mode === "practice" ? "実践問題 完了" : "今日の5問 完了";
+      mode === "review" ? "復習完了"
+      : mode === "practice" ? "実践問題 完了"
+      : mode === "weak" ? "弱点特訓 完了"
+      : "今日の5問 完了";
     document.getElementById("result-stars").classList.add("hidden");
     document.getElementById("result-rank").classList.add("hidden");
     document.getElementById("result-exam-detail").classList.add("hidden");
@@ -1274,6 +1326,12 @@
       `${total}問中 ${quiz.correct}問正解` +
       (mode === "review" && quiz.mastered > 0 ? ` ・ ${quiz.mastered}問を克服` : "") +
       (mode === "review" && quiz.retained > 0 ? ` ・ ${quiz.retained}問の定着を確認` : "") +
+      (mode === "weak" ? (() => {
+        const cs = state.catStats[quiz.catId];
+        const cat = QUIZ_DATA.find(c => c.id === quiz.catId);
+        return cs && cs.answered > 0
+          ? ` ・ ${cat.name}の正答率 ${Math.round((cs.correct / cs.answered) * 100)}%に` : "";
+      })() : "") +
       (mode === "practice" ? ` ・ 実践問題 ${Math.min(Object.keys(state.practiceCleared).length, SCENARIO_DATA.length)}/${SCENARIO_DATA.length}問クリア` +
         (unlockedScenarios().length < SCENARIO_DATA.length
           ? `(挑戦可能 ${unlockedScenarios().length}問 ・ 学習を進めると増えます)` : "") : "") +
@@ -1293,6 +1351,11 @@
       btnRetry.classList.remove("hidden");
       btnRetry.textContent = "もう一度挑戦";
       btnRetry.onclick = () => startPractice();
+    } else if (mode === "weak") {
+      // 特訓の結果、弱点でなくなっていたら再挑戦ボタンは出さない
+      btnRetry.classList.toggle("hidden", !weakTarget());
+      btnRetry.textContent = "もう一度特訓";
+      btnRetry.onclick = () => startWeak();
     } else {
       btnRetry.classList.remove("hidden");
       btnRetry.textContent = "もう一度挑戦";
@@ -2512,7 +2575,7 @@
   // 途中で閉じた(またはOSに落とされた)クイズがあれば再開を提案
   const MODE_LABELS = {
     stage: "ステージ学習", review: "復習", daily: "今日の5問",
-    exam: "実力判定テスト", practice: "実践問題",
+    exam: "実力判定テスト", practice: "実践問題", weak: "弱点特訓",
   };
   const savedQuiz = loadQuizProgress();
   if (savedQuiz) {
