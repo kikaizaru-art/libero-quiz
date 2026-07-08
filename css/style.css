@@ -682,6 +682,8 @@ button:focus-visible {
 }
 .lib-related-item:active { background: var(--btn2); }
 .lib-box .btn { width: 100%; margin-top: 18px; font-size: 14px; padding: 12px; }
+.lib-box #btn-lib-close { margin-top: 8px; }
+#btn-lib-pin.pinned { color: var(--accent); border: 1px solid var(--accent); }
 
 /* 知識カードのイラスト(js/art.js)。分野色は --art-accent で受け取る */
 .knowledge-art {

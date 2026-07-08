@@ -100,6 +100,7 @@
       wrong: {},                                   // "catId:stageIdx:qIdx" -> { count, last, step, due }
       learned: {},                                 // "catId:stageIdx:qIdx" -> { step, due } 定着チェックの予定(正解済みの問題)
       seen: {},                                    // "catId:stageIdx:qIdx" -> true(ライブラリ解放済み)
+      pinned: {},                                  // "catId:stageIdx:qIdx" -> true(ピン留めした知識カード)
       practiceCleared: {},                         // シナリオのlibTitle -> true(実践問題のクリア済み管理)
       practiceStats: { answered: 0, correct: 0 },  // 実践問題の累計成績(記録画面用)
       catStats: {},                                // catId -> { answered, correct }
@@ -1876,15 +1877,18 @@
     const sceneCounts = {};
     QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
       stage.questions.forEach((q, qi) => {
-        if (!state.seen[`${cat.id}:${si}:${qi}`]) return;
+        const key = `${cat.id}:${si}:${qi}`;
+        if (!state.seen[key]) return;
         (q.lib.scenes || []).forEach(s => { sceneCounts[s] = (sceneCounts[s] || 0) + 1; });
+        if (state.pinned[key]) sceneCounts.pinned = (sceneCounts.pinned || 0) + 1;
       })
     ));
 
     // 場面フィルタピル(「明日は会食」など目的からカードを逆引きする導線)
+    // ピン留めは「あとで語る」ためのユーザー自身の目印として先頭に置く
     const scenesEl = document.getElementById("library-scenes");
     scenesEl.innerHTML = "";
-    for (const sc of [{ id: "all", name: "すべて" }, ...LIB_SCENES]) {
+    for (const sc of [{ id: "all", name: "すべて" }, { id: "pinned", name: "ピン留め" }, ...LIB_SCENES]) {
       const btn = document.createElement("button");
       btn.className = `scene-pill${sc.id === libScene ? " active" : ""}`;
       btn.setAttribute("role", "tab");
@@ -2022,14 +2026,17 @@
     renderLibrary();
   });
 
-  // 場面で絞り込んだ一覧(全分野横断・解放済みカードのみ)
+  // 場面(またはピン留め)で絞り込んだ一覧(全分野横断・解放済みカードのみ)
   function renderSceneList() {
     const list = document.getElementById("library-list");
     list.innerHTML = "";
+    const isPinned = libScene === "pinned";
     const hits = [];
     QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
       stage.questions.forEach((q, qi) => {
-        if (state.seen[`${cat.id}:${si}:${qi}`] && q.lib.scenes && q.lib.scenes.includes(libScene)) {
+        const key = `${cat.id}:${si}:${qi}`;
+        if (!state.seen[key]) return;
+        if (isPinned ? state.pinned[key] : (q.lib.scenes && q.lib.scenes.includes(libScene))) {
           hits.push({ cat, q });
         }
       })
@@ -2038,13 +2045,15 @@
     card.className = "card library-cat";
     card.innerHTML = `
       <div class="library-cat-head">
-        <span class="library-cat-name">${LIB_SCENES.find(s => s.id === libScene).name}</span>
+        <span class="library-cat-name">${isPinned ? "ピン留め" : LIB_SCENES.find(s => s.id === libScene).name}</span>
         <span class="library-cat-count">${hits.length}件</span>
       </div>`;
     if (hits.length === 0) {
       const p = document.createElement("p");
       p.className = "library-empty";
-      p.textContent = "この場面で使えるカードはまだありません。クイズで知識カードを集めましょう。";
+      p.textContent = isPinned
+        ? "ピン留めしたカードはまだありません。カードを開いて「ピン留めする」を押すと、あとで語りたい知識をここにまとめられます。"
+        : "この場面で使えるカードはまだありません。クイズで知識カードを集めましょう。";
       card.appendChild(p);
     }
     for (const h of hits) {
@@ -2096,6 +2105,22 @@
       btn.addEventListener("click", () => openLibEntry(e.cat, e.q));
       relList.appendChild(btn);
     }
+
+    // ピン留めトグル(「あとで語りたい」カードの目印。ピルで一覧できる)
+    const pinKey = TITLE_INDEX[q.lib.title].key;
+    const pinBtn = document.getElementById("btn-lib-pin");
+    const renderPinBtn = () => {
+      pinBtn.textContent = state.pinned[pinKey] ? "ピン留め中 ・ タップで解除" : "ピン留めする";
+      pinBtn.classList.toggle("pinned", !!state.pinned[pinKey]);
+    };
+    renderPinBtn();
+    pinBtn.onclick = () => {
+      if (state.pinned[pinKey]) delete state.pinned[pinKey];
+      else state.pinned[pinKey] = true;
+      saveState();
+      renderPinBtn();
+      renderLibrary(); // ピルの件数・ピン留め一覧を即時反映
+    };
 
     document.querySelector(".lib-box").scrollTop = 0; // 関連リンクで移動したとき先頭から読めるように
     libOverlay.classList.remove("hidden");
