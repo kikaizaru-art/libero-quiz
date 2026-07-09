@@ -819,6 +819,16 @@ button.cal-cell { cursor: pointer; }
 .cal-cell.picked { box-shadow: 0 0 0 2px var(--text-dim); }
 .cal-cell.today { box-shadow: 0 0 0 2px var(--accent); }
 
+/* ○×スピード・カード当ての記録行 */
+.mode-stat-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.mode-stat-row:last-child { border-bottom: none; padding-bottom: 2px; }
+
+
 .cal-foot {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin-top: 12px;

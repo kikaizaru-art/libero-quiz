@@ -26,13 +26,15 @@
   const WEAK_MIN_ANSWERED = 10;   // 弱点判定に必要な最低解答数(データ不足の分野を除外)
   const WEAK_RATE_MAX = 0.85;     // この正答率以上の分野は弱点として扱わない
 
-  // ○×スピード:全問からランダムに「答えは◯◯である」の正誤を制限時間内に判定する
+  // ○×スピード:解答済みの問題から「答えは◯◯である」の正誤を制限時間内に判定する
   const TF_SIZE = 10;             // 1回あたりの出題数
   const TF_SECONDS = 10;          // 1問の制限時間(秒)
+  const TF_UNLOCK_LEVEL = 2;      // 解放レベル(基礎の学習を少し進めてから)
 
   // カード当て:解説文(正解の語は伏せる)からライブラリの知識カードを当てる
   const CARDGUESS_SIZE = 8;       // 1回あたりの出題数
   const CARDGUESS_MIN = 8;        // 挑戦に必要な解放済みカード数
+  const CARDGUESS_UNLOCK_LEVEL = 4; // 解放レベル(実践問題の次の段階)
 
   // 実力判定テスト:全分野から初級・中級・上級を5問ずつ、計15問を難易度順に出題して実力を評価
   const EXAM_SIZE_PER_STAGE = 5;              // 各難易度からの出題数
@@ -108,6 +110,10 @@
       days: {},                                    // "YYYY-MM-DD" -> { answered, correct, cards } 週間レポート用の日別内訳
       lastStage: null,                             // { catId, stageIdx } 最後に挑戦したステージ
       exam: { best: null, history: [] },           // best: { rank, score, date } / history: 直近の挑戦記録
+      modeStats: {                                 // ○×スピード・カード当ての累計成績(記録画面用)
+        tf: { plays: 0, answered: 0, correct: 0, best: 0 },
+        cardguess: { plays: 0, answered: 0, correct: 0, best: 0 },
+      },
     };
   }
 
@@ -123,6 +129,7 @@
       merged.streak = Object.assign(defaultState().streak, saved.streak || {});
       merged.exam = Object.assign(defaultState().exam, saved.exam || {});
       merged.practiceStats = Object.assign(defaultState().practiceStats, saved.practiceStats || {});
+      merged.modeStats = Object.assign(defaultState().modeStats, saved.modeStats || {});
       // 旧データ移行:復習リストにある問題は出会い済みなのでライブラリを解放。
       // SRS導入前のエントリには due / step を補完(今日から復習可能)
       for (const k of Object.keys(merged.wrong)) {
@@ -287,8 +294,14 @@
     state.xp += amount;
     const after = levelInfo(state.xp).level;
     if (after > before) {
+      if (before < TF_UNLOCK_LEVEL && after >= TF_UNLOCK_LEVEL) {
+        toast("○×スピードが解放されました。ホームの学習メニューから挑戦できます");
+      }
       if (before < PRACTICE_UNLOCK_LEVEL && after >= PRACTICE_UNLOCK_LEVEL) {
         toast("実践問題が解放されました。ホームの学習メニューから挑戦できます");
+      }
+      if (before < CARDGUESS_UNLOCK_LEVEL && after >= CARDGUESS_UNLOCK_LEVEL) {
+        toast("カード当てが解放されました。ホームの学習メニューから挑戦できます");
       }
       if (after >= 5) awardBadge("level5");
       if (after >= 10) awardBadge("level10");
@@ -567,21 +580,29 @@
       }
     }
 
-    // あそびで復習:同じ問題を別形式で新鮮に解き直す
-    rows.push({
-      label: "○×スピード",
-      sub: `全分野から${TF_SIZE}問 ・ 1問${TF_SECONDS}秒`,
-      onTap: startTrueFalse,
-    });
+    // あそびで復習:一度解いた問題を別形式で新鮮に解き直す(どちらもレベル解放制)
     const cardCount = Object.keys(state.seen).length;
-    if (cardCount >= CARDGUESS_MIN) {
+    if (!tfUnlocked()) {
+      rows.push({ label: "○×スピード", sub: `Lv.${TF_UNLOCK_LEVEL}で解放`, locked: true });
+    } else if (cardCount < TF_SIZE) {
+      rows.push({ label: "○×スピード", sub: `解いた問題${TF_SIZE}問で解放`, locked: true });
+    } else {
+      rows.push({
+        label: "○×スピード",
+        sub: `解いた問題から${TF_SIZE}問 ・ 1問${TF_SECONDS}秒`,
+        onTap: startTrueFalse,
+      });
+    }
+    if (!cardGuessUnlocked()) {
+      rows.push({ label: "カード当て", sub: `Lv.${CARDGUESS_UNLOCK_LEVEL}で解放`, locked: true });
+    } else if (cardCount < CARDGUESS_MIN) {
+      rows.push({ label: "カード当て", sub: `カード${CARDGUESS_MIN}枚で解放`, locked: true });
+    } else {
       rows.push({
         label: "カード当て",
         sub: `集めたカードから${CARDGUESS_SIZE}問`,
         onTap: startCardGuess,
       });
-    } else {
-      rows.push({ label: "カード当て", sub: `カード${CARDGUESS_MIN}枚で解放`, locked: true });
     }
 
     const lastExam = state.exam.history[0];
@@ -896,22 +917,23 @@
   }
 
   // ---------- ○×スピード(2択・制限時間つき) ----------
-  // 既存の4択を「問題の答えは◯◯である」という正誤判定に変換して出題する。
+  // 一度解答した問題を「問題の答えは◯◯である」という正誤判定に変換して出題する。
   // 動的生成した問題(item.dynamic)を通常の解答フローにそのまま流す
 
+  // 解放条件:レベル到達+解答済みの問題が1回分たまっていること
+  function tfUnlocked() {
+    return levelInfo(state.xp).level >= TF_UNLOCK_LEVEL;
+  }
+
   function tfItems() {
-    const all = [];
-    QUIZ_DATA.forEach(cat => cat.stages.forEach((stage, si) =>
-      stage.questions.forEach((q, qi) => all.push({ catId: cat.id, stageIdx: si, qIdx: qi, q }))
-    ));
-    return shuffle(all).slice(0, TF_SIZE).map(base => {
+    return shuffle(seenCardPool()).slice(0, TF_SIZE).map(base => {
       const q = base.q;
       const useTrue = Math.random() < 0.5;
       const shown = useTrue
         ? q.choices[q.answer]
         : q.choices[shuffle(q.choices.map((_, i) => i).filter(i => i !== q.answer))[0]];
       return {
-        catId: base.catId, stageIdx: base.stageIdx, qIdx: base.qIdx,
+        catId: base.cat.id, stageIdx: base.si, qIdx: base.qi,
         dynamic: {
           q: `『${q.q}』の答えは「${shown}」である — ○か×か?`,
           choices: ["○ 正しい", "× 誤り"],
@@ -926,12 +948,20 @@
   }
 
   function startTrueFalse() {
-    quiz = newQuiz("tf", null, null, tfItems());
+    if (!tfUnlocked()) return;
+    const items = tfItems();
+    if (items.length < TF_SIZE) return;
+    quiz = newQuiz("tf", null, null, items);
     show("screen-quiz");
     renderQuestion();
   }
 
   // ---------- カード当て(解説からライブラリの知識カードを逆引き) ----------
+
+  // 解放条件:レベル到達+カード(解答済みの問題)が1回分たまっていること
+  function cardGuessUnlocked() {
+    return levelInfo(state.xp).level >= CARDGUESS_UNLOCK_LEVEL;
+  }
 
   // 解説文から正解につながる語(カード名・正解の選択肢とその語片)を伏せる
   function maskAnswerWords(text, q) {
@@ -981,6 +1011,7 @@
   }
 
   function startCardGuess() {
+    if (!cardGuessUnlocked()) return;
     const items = cardGuessItems();
     if (!items) return;
     quiz = newQuiz("cardguess", null, null, items);
@@ -1464,6 +1495,15 @@
       }
     }
 
+    // ○×スピード・カード当ての累計成績(記録画面用)
+    if (mode === "tf" || mode === "cardguess") {
+      const ms = state.modeStats[mode];
+      ms.plays++;
+      ms.answered += total;
+      ms.correct += quiz.correct;
+      ms.best = Math.max(ms.best, quiz.correct);
+    }
+
     const firstStudyToday = state.streak.last !== todayStr();
     touchStreak();
     gainXp(earnedXp);
@@ -1491,6 +1531,8 @@
         return cs && cs.answered > 0
           ? ` ・ ${cat.name}の正答率 ${Math.round((cs.correct / cs.answered) * 100)}%に` : "";
       })() : "") +
+      ((mode === "tf" || mode === "cardguess")
+        ? ` ・ ベスト ${state.modeStats[mode].best}/${total}問` : "") +
       (mode === "practice" ? ` ・ 実践問題 ${Math.min(Object.keys(state.practiceCleared).length, SCENARIO_DATA.length)}/${SCENARIO_DATA.length}問クリア` +
         (unlockedScenarios().length < SCENARIO_DATA.length
           ? `(挑戦可能 ${unlockedScenarios().length}問 ・ 学習を進めると増えます)` : "") : "") +
@@ -2293,8 +2335,32 @@
     // 実践問題の記録
     renderPracticeStats();
 
+    // ○×スピード・カード当ての記録
+    renderModeStats();
+
     // 実力判定テストの記録
     renderExamHistory();
+  }
+
+  // ○×スピード・カード当ての記録:挑戦回数・正答率・ベスト。未挑戦なら非表示
+  function renderModeStats() {
+    const card = document.getElementById("mode-stats-card");
+    const defs = [
+      { key: "tf", name: "○×スピード", size: TF_SIZE },
+      { key: "cardguess", name: "カード当て", size: CARDGUESS_SIZE },
+    ];
+    const rows = defs.filter(d => (state.modeStats[d.key] || {}).plays > 0);
+    card.classList.toggle("hidden", rows.length === 0);
+    if (rows.length === 0) return;
+    document.getElementById("mode-stats").innerHTML = rows.map(d => {
+      const ms = state.modeStats[d.key];
+      const rate = Math.round((ms.correct / ms.answered) * 100);
+      return `
+        <div class="mode-stat-row">
+          <span class="cat-rate-name">${d.name}</span>
+          <span class="cat-rate-value">挑戦${ms.plays}回 ・ 正答率${rate}% ・ ベスト ${ms.best}/${d.size}問</span>
+        </div>`;
+    }).join("");
   }
 
   // 実践問題の記録:分野別のクリア状況と累計成績。未挑戦なら非表示
