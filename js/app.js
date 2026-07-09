@@ -2687,7 +2687,10 @@
     const info = levelInfo(state.xp);
     document.getElementById("debug-info").textContent =
       `Lv.${info.level} ・ 累計 ${state.xp}XP ・ カード ${Object.keys(state.seen).length}/${allQuestionKeys().length} ・ ` +
-      `復習待ち ${Object.keys(state.wrong).length}問 ・ 定着チェック予定 ${Object.keys(state.learned).length}問 ・ 実績 ${state.badges.length}/${BADGES.length}`;
+      `復習待ち ${Object.keys(state.wrong).length}問 ・ 定着チェック予定 ${Object.keys(state.learned).length}問 ・ ` +
+      `ピン留め ${Object.keys(state.pinned).length}枚 ・ ` +
+      `○× ${state.modeStats.tf.plays}回/カード当て ${state.modeStats.cardguess.plays}回 ・ ` +
+      `実績 ${state.badges.length}/${BADGES.length}`;
   }
 
   document.getElementById("settings-about").addEventListener("click", () => {
@@ -2748,6 +2751,53 @@
       state.seen[k] = true;
     });
     toast(added.length > 0 ? `復習リストに${added.length}問追加しました` : "追加できる問題がありません");
+  });
+  debugAction("dbg-retention", () => {
+    // 定着チェックを今日出題される状態で追加(復習リスト入りの問題は対象外)
+    const today = todayStr();
+    const pool = shuffle(allQuestionKeys()
+      .filter(k => !state.wrong[k] && !(state.learned[k] && state.learned[k].due <= today)));
+    const added = pool.slice(0, DEBUG_REVIEW_ADD);
+    added.forEach(k => {
+      state.learned[k] = { step: 0, due: today };
+      state.seen[k] = true;
+    });
+    toast(added.length > 0 ? `定着チェックに${added.length}問追加しました` : "追加できる問題がありません");
+  });
+  debugAction("dbg-weak", () => {
+    // 先頭の分野に低正答率の成績を積んで、弱点特訓の提案を発火させる
+    const cat = QUIZ_DATA[0];
+    const cs = state.catStats[cat.id] || (state.catStats[cat.id] = { answered: 0, correct: 0 });
+    cs.answered += 20;
+    cs.correct += 12;
+    const rate = Math.round((cs.correct / cs.answered) * 100);
+    toast(`${cat.name}に20問(12問正解)を追加 ・ 正答率${rate}%`);
+  });
+  debugAction("dbg-lastweek", () => {
+    // 週間レポートの先週比較を確認するため、先週(日曜始まり)に5日分の学習を作る
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() - 7);
+    let total = 0;
+    for (let i = 0; i < 7; i++) {
+      if (i % 3 === 2) continue; // 2日休んだ週5日ペース
+      const key = dateStr(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+      state.activity[key] = (state.activity[key] || 0) + 10;
+      const d = state.days[key] || (state.days[key] = { answered: 0, correct: 0, cards: 0 });
+      d.answered += 10;
+      d.correct += 8;
+      d.cards += 2;
+      total += 10;
+    }
+    toast(`先週の学習データを生成しました(+${total}問)`);
+  });
+  debugAction("dbg-pin", () => {
+    const pool = shuffle(allQuestionKeys().filter(k => !state.pinned[k]));
+    const added = pool.slice(0, DEBUG_REVIEW_ADD);
+    added.forEach(k => {
+      state.pinned[k] = true;
+      state.seen[k] = true; // 未解放カードはピン留めと同時に解放する
+    });
+    toast(added.length > 0 ? `カードを${added.length}枚ピン留めしました` : "追加できるカードがありません");
   });
   debugAction("dbg-badges", () => {
     state.badges = BADGES.map(b => b.id);
