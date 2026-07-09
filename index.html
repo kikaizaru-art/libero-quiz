@@ -102,6 +102,9 @@
       </header>
       <div class="quiz-body">
         <div class="quiz-meta" id="quiz-meta"></div>
+        <div class="quiz-timer hidden" id="quiz-timer" aria-hidden="true">
+          <div class="quiz-timer-fill" id="quiz-timer-fill"></div>
+        </div>
         <div class="question-card" id="question-card">
           <p id="question-text"></p>
         </div>
@@ -157,7 +160,7 @@
         <button class="btn btn-primary btn-big btn-review-start" id="btn-review-start">復習する</button>
       </div>
       <div class="card hidden" id="review-empty-card">
-        <p class="review-desc">復習待ちはありません。クイズで間違えた問題がここに溜まります。</p>
+        <p class="review-desc">復習待ちはありません。クイズで間違えた問題がここに溜まるほか、正解した問題も忘れた頃に定着チェックとして出題されます。</p>
         <button class="continue-item hidden" id="review-goto-daily">
           <span class="continue-label">今日の5問</span>
           <span class="continue-sub">ここから始める</span>
@@ -202,6 +205,14 @@
           <div class="stats-grid" id="stats-summary"></div>
         </div>
         <div class="card">
+          <div class="exam-history-head">
+            <h2 class="card-title">今週のレポート</h2>
+            <span class="exam-history-best" id="weekly-range"></span>
+          </div>
+          <div class="stats-grid" id="weekly-grid"></div>
+          <p class="practice-stats-note" id="weekly-note"></p>
+        </div>
+        <div class="card">
           <h2 class="card-title">学習カレンダー</h2>
           <div class="cal-tabs" id="cal-tabs"></div>
           <div class="cal-grid cal-weekdays">
@@ -238,6 +249,10 @@
           </div>
           <div id="practice-cats"></div>
           <p class="practice-stats-note" id="practice-stats-note"></p>
+        </div>
+        <div class="card hidden" id="mode-stats-card">
+          <h2 class="card-title">○×スピード・カード当て</h2>
+          <div id="mode-stats"></div>
         </div>
         <div class="card hidden" id="exam-history-card">
           <div class="exam-history-head">
@@ -438,6 +453,7 @@
           <div class="lib-related-label">あわせて語ると深い</div>
           <div id="lib-related-list"></div>
         </div>
+        <button class="btn btn-secondary" id="btn-lib-pin">ピン留めする</button>
         <button class="btn btn-secondary" id="btn-lib-close">閉じる</button>
       </div>
     </div>

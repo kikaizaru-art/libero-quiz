@@ -682,6 +682,8 @@ button:focus-visible {
 }
 .lib-related-item:active { background: var(--btn2); }
 .lib-box .btn { width: 100%; margin-top: 18px; font-size: 14px; padding: 12px; }
+.lib-box #btn-lib-close { margin-top: 8px; }
+#btn-lib-pin.pinned { color: var(--accent); border: 1px solid var(--accent); }
 
 /* 知識カードのイラスト(js/art.js)。分野色は --art-accent で受け取る */
 .knowledge-art {
@@ -816,6 +818,16 @@ button.cal-cell { cursor: pointer; }
 /* タップで選択中の日(既定は今日)。今日のリングが常に優先 */
 .cal-cell.picked { box-shadow: 0 0 0 2px var(--text-dim); }
 .cal-cell.today { box-shadow: 0 0 0 2px var(--accent); }
+
+/* ○×スピード・カード当ての記録行 */
+.mode-stat-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.mode-stat-row:last-child { border-bottom: none; padding-bottom: 2px; }
+
 
 .cal-foot {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -1014,6 +1026,26 @@ button.cal-cell { cursor: pointer; }
 
 .quiz-body { padding-bottom: 40px; }
 .quiz-meta { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
+
+/* ○×スピードの制限時間バー(1問ごとにアニメーションを再生) */
+.quiz-timer {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--track);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.quiz-timer-fill {
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(1);
+}
+.quiz-timer-fill.run { animation: quiz-timer-run 10s linear forwards; }
+@keyframes quiz-timer-run {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
 
 .question-card {
   background: var(--q-bg);
